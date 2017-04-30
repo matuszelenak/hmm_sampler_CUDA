@@ -1,0 +1,12 @@
+\BOOKMARK [0][-]{chapter.1}{Introduction}{}% 1
+\BOOKMARK [0][-]{chapter.2}{Background}{}% 2
+\BOOKMARK [1][-]{section.2.1}{DNA}{chapter.2}% 3
+\BOOKMARK [1][-]{section.2.2}{Sequencing DNA}{chapter.2}% 4
+\BOOKMARK [1][-]{section.2.3}{Nanopore sequencing and MinION platform}{chapter.2}% 5
+\BOOKMARK [1][-]{section.2.4}{Hidden Markov model}{chapter.2}% 6
+\BOOKMARK [1][-]{section.2.5}{Sampling from HMM}{chapter.2}% 7
+\BOOKMARK [1][-]{section.2.6}{Alignment of sequences}{chapter.2}% 8
+\BOOKMARK [0][-]{chapter.3}{Sampling algorithm design and implementation}{}% 9
+\BOOKMARK [0][-]{chapter.4}{Seeding algorithm design and implementation}{}% 10
+\BOOKMARK [0][-]{chapter.5}{Experimental comparison with existing methods}{}% 11
+\BOOKMARK [0][-]{chapter.6}{Conclusion}{}% 12

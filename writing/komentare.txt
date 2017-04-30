@@ -1,0 +1,69 @@
+Osnova práce sa mi nezdá najšťastnejšia. Text v primeranom rozsahu, písaný celkom peknou angličtinou, ale mnoho pojmov je málo vysvetlených, vecné chyby.
+
+> Osnova sa ešte bude určite meniť.
+
+* V osnove chýba kapitola Introduction.
+
+> Fixed
+
+* Asi v práci budú aj nejaké experimentálne porovnania, možno by tiež mohli mať kapitolu. Naopak kapitoly 2+3 a 4+5 by sa možno dali pozlučovať. Kde bude v práci jasne stanovený cieľ a popísané existujúce prístupy?
+
+> Kapitola pre experimenty pridana. Predpokladam, ze stanovenie cielov bude uvedene na zaciatku kapitol, ktore budu popisovat algoritmy
+
+* Kapitola 1 by mohla mať jednoducho názov Background
+
+> Fixed
+
+* Časť 1.1, 1.2: Pojmy nevysvetľuješ veľmi jasne. Napr. v prvom odstavci 1.1. sa len tak vyskytne slovo nucleotide, ale nevieme, čo to je. Až v druhom odstavci je medzi rečou naznačené, že sú 4 rôzne a v treťom dostavci, že sa nejako viažu do párov, ale nie je jasné ako to celé vyzerá. Podobne v 1.2 je pojem read zavedený veľmi nešťastne v dlhej rozvitej vete, ktorá naznačuje, že read má byť dlhý, čo nie je vždy tak.
+
+> Oboje by uz malo byt trocha zrozumitelnejsie
+
+*  Časť 1.2: "With each generation, the length of the possible reads has increased,..." Táto veta vôbec nie je pravdivá.
+
+> Odstranene.
+
+* Časť 1.3: Event nie je jedno meranie. Tiež nie je jasné, čo znamená mapovať event na k-mer.
+
+> Fixed
+
+* Časť 1.4: odvolávať sa pri definícii štandardného pojmu ako HMM zrovna na inú bakalárku nie je práve najšťastnejšie a prevziať odtiaľ definíciu takmer doslova už vôbec nie. 
+
+> Skusal som si najst ine formalne definicie inde a ta, ktoru pouzil Rasto mi pride najlepsia, ak by som mal zadefinovat HMM po vlastnom vyzeralo by to na 95% rovnako, tak som si povedal ze to uz mozem rovno referencnut. Ak je to tak velky problem, mozem tam hodit vlastnu definiciu.
+
+* Časť 1.4: "Q set" -> "set Q"
+> Fixed
+
+* Časť 1.4: "v = [...] is a subsequence [...] of non-silent states of sequence s" tu treba jasnejšie napísať, že sú to všetky netiché stavy, nielen niektoré, t.j. "v = [...] is the subsequence [...] of all non-silent states from sequence s"
+> Fixed
+
+* Časť 1.4: "Let us now construct a simple HMM" dúfam, že bude v budúcnosti podrobnejšie rozpísaný
+> Ak ide o to, ze som to nerozpisal formalne cez definicie mnozin atp tak to v buducnosti rozpisem lepsie. Osobne mi to pride postacujuce.
+
+* Časť 1.5.: sampling neznamená len že pravdepodobnosť je nenulová a že sú nejako náhodné, ale že  pravdepodobnosť vyvzorkovania nejakej cesty je naozaj úmerné jej pravdepodobnosti v modeli.
+
+> Fixed.
+
+* Časť 1.5. "their time and/or space complexity disqualies them from practical use" prečo? aká je tá zložitosť?
+> Nuz, netusim aka je ich zlozitost, ale z nasich rozhovorov som ziskal presvedcenie, ze dost zla :D Opravil som to na tvrdenie ze su proste pomale a chceme lepsie.
+
+* Časť 1.6: popis zarovnania veľmi neuspokojivý. Slovo "rearrange" vyvoláva dojem, že môžeme časti sekvencie nejako ľubovoľne prehadzovať. Chcelo by lepšie vysvetliť, čo to je, ukázať príklad. "functional, structural or evolutionary relationship" väčšinou nepoznáme, naopak sa ho snažíme pomocou zarovnania nájsť. Neopisuj frázy, ktorým nerozumieš.
+> Fixed
+
+* Časť 1.6: Prečo sú S_1 a S_2 rovnako dlhé? Tiež nestačí, že A_i je podpostupnosť S_i, potrebujeme aby zvyšok boli pomlčky.
+> Fixed.
+
+*  Časť 1.6: "takes the results of f(A_1_i , A_2_i) - označenie členov postupností nesedí A_1 a A_2 s tým zavedeným skôr
+> No hej, fixed
+
+* Časť 1.6: "punish continuation of gap more than opening a new one" väčšinou to býva naopak
+> Som blb, pravdaze som myslel to, fixed
+
+* Časť 1.6: NCPI-BLAST zlá skratka
+> Clovek si tak mysli ze po tom co to videl 100x to da z pamati a ono nie... Fixed
+
+* Bibliography [1]: HMM má byť veľkým (v bib súbore treba dať do {})
+> Fixed
+
+* Bibliography [3]: V anglickom texte namiesto skratky FMFI lepšie dať Comenius University
+> Fixed
+
