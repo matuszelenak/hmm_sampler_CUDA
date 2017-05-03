@@ -8,13 +8,16 @@ bool LogNum::isZero() const{
 	return (exponent == -HUGE_VAL);
 }
 
-double LogNum::exponentiate(){
+double LogNum::exponentiate() const{
+	if (isZero()) return 0;
 	return exp(exponent);
 }
 
 LogNum operator+(LogNum &a, const LogNum &b){
-	a+=b;
-	return a;
+	LogNum r(0.0);
+	r.exponent = a.exponent;
+	r+=b;
+	return r;
 }
 
 LogNum& LogNum::operator+=(const LogNum& a){
@@ -33,8 +36,10 @@ LogNum& LogNum::operator+=(const LogNum& a){
 }
 
 LogNum operator*(LogNum &a, const LogNum &b){
-	a*=b;
-	return a;
+	LogNum r(0.0);
+	r.exponent = a.exponent;
+	r*=b;
+	return r;
 }
 
 LogNum& LogNum::operator*=(const LogNum& a){
@@ -57,4 +62,14 @@ bool LogNum::operator>(const LogNum& a)const{
 	if (!isZero() && a.isZero()) return true;
 	if (a.isZero()) return true;
 	return exponent > a.exponent;
+}
+
+bool LogNum::operator==(const LogNum& num) const {
+  double this_val = this->exponentiate();
+  double num_val = num.exponentiate();
+  return fabs(this_val - num_val) < kEpsilon;
+}
+
+double LogNum::get_exponent() const{
+	return exponent;
 }

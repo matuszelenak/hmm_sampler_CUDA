@@ -9,11 +9,13 @@
 
 class State{
 private:
-	double mean;
-	double stdv;
 	bool silent;
 public:
 	std::string kmer_label;
+	double mean;
+	double stdv;
+	double corrected_mean;
+	double corrected_stdv;
 	bool isSilent();
 	void setParams(double m, double s, double sil);
 	LogNum get_emission_probability(double emission);

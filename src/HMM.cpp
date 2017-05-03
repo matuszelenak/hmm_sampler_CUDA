@@ -3,15 +3,15 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <algorithm>
+#include <limits>
 
 #include <cstdio>
+#include <boost/log/trivial.hpp>
 
 #include "State.h"
 #include "LogNum.h"
 #include "HMM.h"
-
-template < typename val >
-using Matrix = std::vector<std::vector<val> >;
 
 std::vector<std::string>HMM::generate_suffixes(){
 	std::vector<std::string>res;
@@ -21,6 +21,7 @@ std::vector<std::string>HMM::generate_suffixes(){
 		for (std::set<char>::iterator it2 = bases.begin(); it2 != bases.end(); ++it2){
 			acc.push_back(*it2);
 			res.push_back(acc);
+			acc.pop_back();
 		}
 	}
 	return res;
@@ -34,16 +35,18 @@ std::vector<std::string>HMM::split_string(std::string &s, char delimiter){
 			res.push_back(acc);
 			acc = "";
 		}
-		if (s[i] != delimiter) acc += s[i];
+		if (s[i] != delimiter) acc.push_back(s[i]);
 	}
+	if (acc.size() > 0) res.push_back(acc);
 	return res;
 }
 
 void HMM::loadModelParams(std::string filename){
+	BOOST_LOG_TRIVIAL(info) << "Loading pore model parameters from " << filename << "...";
+
 	states.clear();
 	State init_state;
 	init_state.setParams(0,0,true);
-	init_state.kmer_label = std::string(kmer_size, ' ');
 	states.push_back(init_state);
 
 	std::ifstream model_file;
@@ -53,95 +56,156 @@ void HMM::loadModelParams(std::string filename){
 	while(getline(model_file, line)) {
 		std::vector<std::string> line_elements = split_string(line, '\t');
 		kmer_label = line_elements[0];
-		double mean = stod(line_elements[1], 0);
-		double stdv = stod(line_elements[2], 0);
-		//TODO figure out what the remaining two parameters in Nanocall models are for
+		std::size_t offset = 0;
+		double mean = std::stod(&line_elements[1][0], &offset);
+		double stdv = std::stod(&line_elements[2][0], &offset);
 		State state;
 		state.kmer_label = kmer_label;
-		std::cout << kmer_label << std::endl;
 		state.setParams(mean, stdv, false);
 		kmer_to_state.insert(std::pair<std::string, int>(kmer_label, states.size()));
 		states.push_back(state);
 		for (int i = 0; i < kmer_label.size(); i++){
 			bases.insert(kmer_label[i]);
 		}
-	kmer_size = kmer_label.size();
 	}
+	kmer_size = kmer_label.size();
+	std::string init_state_label(kmer_size, ' ');
+	states[0].kmer_label = init_state_label;
 	model_file.close();
+
+	BOOST_LOG_TRIVIAL(info) << "Loaded model with " << (int)states.size() << " states and kmer size " << kmer_size;
 }
 
-void HMM::compute_transitions(double prob_skip, double prob_stay){
-	transitions.clear();
+void HMM::adjust_scaling(std::vector<double>& event_sequence){
+	BOOST_LOG_TRIVIAL(info) << "Adjusting the scaling of pore model parameters...";
+	double dmax = DBL_MIN;
+	double dmin = DBL_MAX;
+	double mmax = DBL_MIN;
+	double mmin = DBL_MAX;
+	double sc, sh;
+	for (int i = 0; i < event_sequence.size(); i++){
+		dmax = std::max(dmax, event_sequence[i]);
+		dmin = std::min(dmin, event_sequence[i]);
+	}
+	for (int i = 1; i < states.size(); i++){
+		mmax = std::max(mmax, states[i].mean);
+		mmin = std::min(mmin, states[i].mean);
+	}
+	sc = (dmax - dmin) / (mmax - mmin);
+	sh = dmax - mmax*sc;
+	BOOST_LOG_TRIVIAL(info) << "Done. Scale = "<< sc << ", shift = " << sh;
+	for (int i = 1; i < states.size(); i++){
+		states[i].corrected_mean = states[i].corrected_mean*sc + sh;
+	}
+}
 
+void HMM::set_stay_prob(double prob){
+	prob_stay = prob;
+}
+
+void HMM::set_skip_prob(double prob){
+	prob_skip = prob;
+}
+
+int HMM::kmer_overlap(std::string from, std::string to){
+	int count = 0;
+	for (int prefix = 0; prefix < from.size(); prefix++){
+		std::string from_suffix = from.substr(prefix, from.size() - prefix);
+		std::string to_prefix = to.substr(0, from.size() - prefix);
+		if (from_suffix == to_prefix){
+			return count;
+		}
+		count++;
+	}
+	return count;
+}
+
+void HMM::compute_transitions(){
+	BOOST_LOG_TRIVIAL(info) << "Computing state transition probabilites...";
+	transitions.clear();
 	inverse_transitions.clear();
 	//initialize all probabilites to zero
-	for (int i = 0; i < states.size(); i++){
-		std::vector<LogNum>t(states.size(), LogNum(0.0));
-		transitions.push_back(t);
-		std::vector<LogNum>t2(states.size(), LogNum(0.0));
-		inverse_transitions.push_back(t2);
-	}
-	//initialize transitions from the init state to all others
+	transitions.resize(states.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
+	inverse_transitions.resize(states.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
+
 	for (int i = 1; i < states.size(); i++){
-		transitions[0][i] = LogNum(1/(states.size() - 1));
-		inverse_transitions[i][0] = LogNum(1/(states.size() - 1));
+		transitions[0][i] = LogNum((double)1/(double)(states.size() - 1));
+		inverse_transitions[i][0] = LogNum((double)1/(double)(states.size() - 1));
 	}
-	//cyclic transitions to states
-	for (int i = 1; i < states.size(); i++){
-		transitions[i][i] = LogNum(prob_stay);
-		inverse_transitions[i][i] = LogNum(prob_stay);
-	}
-	//transitions that skip base
-	std::vector<std::string> suffixes = generate_suffixes();
-	for (std::map<std::string, int>::iterator it = kmer_to_state.begin(); it != kmer_to_state.end(); ++it){
-		std::string kmer_from = it -> first;
-		int state_from = it -> second;
-		std::string prefix = kmer_from.substr(2,kmer_size - 2);
-		for (int k = 0; k < suffixes.size(); k++){
-			std::string kmer_to = prefix + suffixes[k];
-			int state_to = kmer_to_state[kmer_to];
-			transitions[state_from][state_to] = LogNum(prob_skip);
-			inverse_transitions[state_to][state_from] = LogNum(prob_skip);
+
+	for (int state_from = 1; state_from < states.size(); state_from++){
+		std::vector<int>normal_states;
+		std::vector<int>skip_states;
+		for (int state_to = 1; state_to < states.size(); state_to ++){
+			std::string kmer_from = states[state_from].kmer_label;
+			std::string kmer_to = states[state_to].kmer_label;
+			int overlap = kmer_overlap(kmer_from, kmer_to);
+			switch(overlap){
+				case 0 : {
+					//std::cout << "Transition " << kmer_from << " -> "<< kmer_to << " is a loop" << std::endl;
+					transitions[state_from][state_to] = LogNum(prob_stay);
+					inverse_transitions[state_from][state_from] = LogNum(prob_stay);
+					break;
+				}
+				case 1 : {
+					//std::cout << "Transition " << kmer_from << " -> "<< kmer_to << " is normal" << std::endl;
+					normal_states.push_back(state_to);
+					break;
+				}
+				case 2 : {
+					//std::cout << "Transition " << kmer_from << " -> "<< kmer_to << " is skip" << std::endl;
+					skip_states.push_back(state_to);
+					break;
+				}
+			}
+		}
+		for (int i = 0; i < normal_states.size(); i++){
+			transitions[state_from][normal_states[i]] = LogNum((1 - prob_skip - prob_stay) / normal_states.size());
+			inverse_transitions[normal_states[i]][state_from] = LogNum((1 - prob_skip - prob_stay) / normal_states.size());
+		}
+		for (int i = 0; i < skip_states.size(); i++){
+			transitions[state_from][skip_states[i]] = LogNum(prob_skip / skip_states.size());
+			inverse_transitions[skip_states[i]][state_from] = LogNum(prob_skip / skip_states.size());
 		}
 	}
-	//normal transitions
-	double normal_trans_prob = (1 - prob_skip - prob_stay) / 4;
-	for (std::map<std::string, int>::iterator it = kmer_to_state.begin(); it != kmer_to_state.end(); ++it){
-		std::string kmer_from = it -> first;
-		int state_from = it -> second;
-		std::string prefix = kmer_from.substr(1,kmer_size - 1);
-		for (std::set<char>::iterator it = bases.begin(); it != bases.end(); ++it){
-			std::string kmer_to = prefix + (*it);
-			int state_to = kmer_to_state[kmer_to];
-			transitions[state_from][state_to] = LogNum(normal_trans_prob);
-			inverse_transitions[state_to][state_from] = LogNum(normal_trans_prob);
-		}
-	}
+
+	BOOST_LOG_TRIVIAL(info) << "Transition computation done";
 }
 
-std::vector<int> HMM::compute_viterbi_path(std::vector<double> event_sequence){
-	Matrix<LogNum>viterbi_matrix;
-	Matrix<int> back_ptr;
-	for (int i = 0; i < states.size(); i++){
-		std::vector<LogNum>row(event_sequence.size(), 0);
-		viterbi_matrix.push_back(row);
-		std::vector<int>row2(event_sequence.size(), 0);
-		back_ptr.push_back(row2);
-	}
-	viterbi_matrix[0][0] = 1;
+std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 
+	BOOST_LOG_TRIVIAL(info) << "Running viterbi" << "\n";
+
+	Matrix<LogNum>viterbi_matrix(states.size(), std::vector<LogNum>(event_sequence.size(), LogNum(0.0)));
+	Matrix<int> back_ptr(event_sequence.size(), std::vector<int>(states.size(), 0));
+	for (int i = 0; i < states.size(); i++){
+		viterbi_matrix[i][0] = LogNum(transitions[0][i] * states[i].get_emission_probability(event_sequence[0]));
+	}
 	for (int i = 1; i < event_sequence.size(); i++){
 		for (int l = 0; l < states.size(); l++){
 			LogNum m(0.0);
 			for (int k = 0; k < states.size(); k++){
 				if (viterbi_matrix[k][i - 1] + transitions[k][l] > m){
-					m = viterbi_matrix[k][i - 1] * transitions[k][l];
+					m = viterbi_matrix[k][i - 1] + transitions[k][l];
 					back_ptr[i][l] = k;
 				}
 			}
 			viterbi_matrix[l][i] = m + states[l].get_emission_probability(event_sequence[i]);
+				
 		}
 	}
+	/*
+	printf("%5c ", '0');
+	for (int i = 0; i < event_sequence.size(); i++) printf("%2.3f ", event_sequence[i]);
+	printf("\n");
+	for (int i = 0; i < viterbi_matrix.size(); i++){
+		printf("%5d ", i);
+		for (int j = 0; j < viterbi_matrix[i].size(); j++){
+			printf("%1.4f ", viterbi_matrix[i][j].exponentiate());
+		}
+		printf("\n");
+	}*/
+
 	LogNum m(0.0);
 	int last_state = 0;
 	for (int k = 0; k < states.size(); k++){
@@ -152,6 +216,7 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double> event_sequence){
 	}
 	std::vector<int>state_sequence;
 	state_sequence.push_back(last_state);
+	
 	int prev_state = last_state;
 	for (int i = event_sequence.size() - 1; i >= 1; i--){
 		int s = back_ptr[i][prev_state];
@@ -159,18 +224,17 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double> event_sequence){
 		prev_state = s;
 	}
 	reverse(state_sequence.begin(), state_sequence.end());
+	BOOST_LOG_TRIVIAL(info) << "Viterbi path complete";
 	return state_sequence;
 
 }
 
-Matrix<LogNum> HMM::compute_forward_matrix(std::vector<double> event_sequence){
-	Matrix<LogNum>fwd_matrix;
-	for (int i = 0; i < states.size(); i++){
-		std::vector<LogNum>row(event_sequence.size(), 0);
-		fwd_matrix.push_back(row);
-	}
+Matrix<LogNum> HMM::compute_forward_matrix(std::vector<double>& event_sequence){
+	Matrix<LogNum>fwd_matrix(states.size(), std::vector<LogNum>(event_sequence.size(), LogNum(0.0)));
 
-	fwd_matrix[0][0] = 1;
+	for (int i = 0; i < states.size(); i++){
+		fwd_matrix[i][0] = LogNum(transitions[0][i] * states[i].get_emission_probability(event_sequence[0]));
+	}
 
 	for (int i = 1; i < event_sequence.size(); i++){
 		for (int l = 0; l < states.size(); l++){
@@ -184,12 +248,13 @@ Matrix<LogNum> HMM::compute_forward_matrix(std::vector<double> event_sequence){
 	return fwd_matrix;
 }
 
-std::vector<char> HMM::translate_to_bases(std::vector<int>state_sequence){
+std::vector<char> HMM::translate_to_bases(std::vector<int>&state_sequence){
+	BOOST_LOG_TRIVIAL(info) << "Translating state sequence into DNA bases";
 	int prev_state = state_sequence[0];
 	std::vector<char> dna_seq;
+	for (int i = 0; i < states[prev_state].kmer_label.size(); i++) dna_seq.push_back(states[prev_state].kmer_label[i]);
 	for (int i = 1; i < state_sequence.size(); i++){
 		int curr_state = state_sequence[i];
-		if (prev_state == curr_state) continue;
 		for (int prefix = 1; prefix <= kmer_size; prefix++){
 			std::string prev_suffix = (states[prev_state].kmer_label).substr(prefix, kmer_size - prefix);
 			std::string curr_prefix = (states[curr_state].kmer_label).substr(0, kmer_size - prefix);
@@ -198,9 +263,12 @@ std::vector<char> HMM::translate_to_bases(std::vector<int>state_sequence){
 				for (int k = 0; k < appendage.size(); k++){
 					dna_seq.push_back(appendage[k]);
 				}
+				break;
 			}
 		}
+		prev_state = curr_state;
 	}
+	BOOST_LOG_TRIVIAL(info) << "Translation done";
 	return dna_seq;
 
 }

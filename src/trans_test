@@ -1,0 +1,76 @@
+2|0
+4|0
+6|0
+8|0
+State 0 to 1 prob 0.250000
+State 0 to 2 prob 0.250000
+State 0 to 3 prob 0.250000
+State 0 to 4 prob 0.250000
+Transition A -> A is a loop
+Transition A -> C is normal
+Transition A -> G is normal
+Transition A -> T is normal
+Transition C -> A is normal
+Transition C -> C is a loop
+Transition C -> G is normal
+Transition C -> T is normal
+Transition G -> A is normal
+Transition G -> C is normal
+Transition G -> G is a loop
+Transition G -> T is normal
+Transition T -> A is normal
+Transition T -> C is normal
+Transition T -> G is normal
+Transition T -> T is a loop
+Transition probabilities from state 0 have sum 1.000000
+Transition probabilities from state 1 have sum 0.700000
+Transition probabilities from state 2 have sum 0.700000
+Transition probabilities from state 3 have sum 0.700000
+Transition probabilities from state 4 have sum 0.700000
+Loaded HMM
+Number of states : 5Length of kmer 1
+Viterbi matrix for seq size 1 done
+Emission probability for state 0 and event 2.100000 is 0.000000
+Emission probability for state 1 and event 2.100000 is -nan
+Emission probability for state 2 and event 2.100000 is -nan
+Emission probability for state 3 and event 2.100000 is -nan
+Emission probability for state 4 and event 2.100000 is -nan
+Viterbi matrix for seq size 2 done
+Emission probability for state 0 and event 4.200000 is 0.000000
+Emission probability for state 1 and event 4.200000 is -nan
+Emission probability for state 2 and event 4.200000 is -nan
+Emission probability for state 3 and event 4.200000 is -nan
+Emission probability for state 4 and event 4.200000 is -nan
+Viterbi matrix for seq size 3 done
+Emission probability for state 0 and event 6.100000 is 0.000000
+Emission probability for state 1 and event 6.100000 is -nan
+Emission probability for state 2 and event 6.100000 is -nan
+Emission probability for state 3 and event 6.100000 is -nan
+Emission probability for state 4 and event 6.100000 is -nan
+Viterbi matrix for seq size 4 done
+Emission probability for state 0 and event 7.900000 is 0.000000
+Emission probability for state 1 and event 7.900000 is -nan
+Emission probability for state 2 and event 7.900000 is -nan
+Emission probability for state 3 and event 7.900000 is -nan
+Emission probability for state 4 and event 7.900000 is -nan
+Viterbi matrix for seq size 5 done
+Emission probability for state 0 and event 1.800000 is 0.000000
+Emission probability for state 1 and event 1.800000 is -nan
+Emission probability for state 2 and event 1.800000 is -nan
+Emission probability for state 3 and event 1.800000 is -nan
+Emission probability for state 4 and event 1.800000 is -nan
+Viterbi matrix for seq size 6 done
+Emission probability for state 0 and event 3.700000 is 0.000000
+Emission probability for state 1 and event 3.700000 is -nan
+Emission probability for state 2 and event 3.700000 is -nan
+Emission probability for state 3 and event 3.700000 is -nan
+Emission probability for state 4 and event 3.700000 is -nan
+    0 2.100 2.100 4.200 6.100 7.900 1.800 3.700 
+    0 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 
+    1 -nan -nan -nan -nan -nan -nan -nan 
+    2 -nan -nan -nan -nan -nan -nan -nan 
+    3 -nan -nan -nan -nan -nan -nan -nan 
+    4 -nan -nan -nan -nan -nan -nan -nan 
+Matrix compution done
+Found the last state 1
+1 1 1 1 1 1 1 

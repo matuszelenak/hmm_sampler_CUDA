@@ -2,7 +2,9 @@
 #define LOGNUM_H
 
 #include <cmath>
-#include <limits>
+#include <cfloat>
+
+const double kEpsilon = 1.0e-15;
 
 class LogNum{
 public:
@@ -11,7 +13,7 @@ public:
 
 	bool isZero() const;
 
-	double exponentiate();
+	double exponentiate() const;
 
 	LogNum(double n);
 
@@ -25,6 +27,10 @@ public:
 	friend LogNum operator+(LogNum &a, const LogNum &b);
 
 	friend LogNum operator*(LogNum &a, const LogNum &b);
+
+	bool operator==(const LogNum& num) const;
+
+	double get_exponent() const;
 
 };
 
