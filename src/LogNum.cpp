@@ -8,7 +8,7 @@ bool LogNum::isZero() const{
 	return (exponent == -HUGE_VAL);
 }
 
-double LogNum::exponentiate() const{
+double LogNum::value() const{
 	if (isZero()) return 0;
 	return exp(exponent);
 }
@@ -77,8 +77,8 @@ bool LogNum::operator>(const LogNum& a)const{
 }
 
 bool LogNum::operator==(const LogNum& num) const {
-  double this_val = this->exponentiate();
-  double num_val = num.exponentiate();
+  double this_val = this->value();
+  double num_val = num.value();
   return fabs(this_val - num_val) < kEpsilon;
 }
 

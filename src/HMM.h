@@ -36,14 +36,20 @@ private:
 	int kmer_overlap(std::string from, std::string to);
 
 public:
-	void loadModelParams(std::string filename);
+	void load_model_params(std::string filename);
 	void compute_transitions();
 	Matrix<std::vector<double> > compute_forward_matrix(std::vector<double>& event_sequence);
+
 	std::vector<int> compute_viterbi_path(std::vector<double>&event_sequence);
+
 	std::vector<int> backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen);
+
 	Matrix<int> generate_samples(int num_of_samples, std::vector<double>&event_sequence, int seed);
+
 	std::vector<char> translate_to_bases(std::vector<int>&state_sequence) const;
+
 	void adjust_scaling(std::vector<double>& event_sequence);
+	
 	void set_stay_prob(double prob);
 	void set_skip_prob(double prob);
 };

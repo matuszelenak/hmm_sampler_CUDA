@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <random>
+#include <chrono>
 
 #include <cstdio>
 #include <boost/log/trivial.hpp>
@@ -13,6 +14,10 @@
 #include "State.h"
 #include "LogNum.h"
 #include "HMM.h"
+
+using std::chrono::system_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
 
 std::vector<std::string>HMM::generate_suffixes(){
 	std::vector<std::string>res;
@@ -42,16 +47,15 @@ std::vector<std::string>HMM::split_string(std::string &s, char delimiter){
 	return res;
 }
 
-void HMM::loadModelParams(std::string filename){
+void HMM::load_model_params(std::string filename){
 	BOOST_LOG_TRIVIAL(info) << "Loading pore model parameters from " << filename << "...";
+	auto start = system_clock::now();
 
 	states.clear();
-
-	std::ifstream model_file;
-	model_file.open(filename);
+	std::ifstream model_file(filename);
 	std::string line;
 	std::string kmer_label;
-	while(getline(model_file, line)) {
+	while(getline(model_file, line)){
 		std::vector<std::string> line_elements = split_string(line, '\t');
 		kmer_label = line_elements[0];
 		std::size_t offset = 0;
@@ -59,7 +63,7 @@ void HMM::loadModelParams(std::string filename){
 		double stdv = std::stod(&line_elements[2][0], &offset);
 		State state;
 		state.kmer_label = kmer_label;
-		state.setParams(mean, stdv, false);
+		state.setParams(mean, stdv);
 		kmer_to_state.insert(std::pair<std::string, int>(kmer_label, states.size()));
 		states.push_back(state);
 		for (int i = 0; i < kmer_label.size(); i++){
@@ -70,7 +74,9 @@ void HMM::loadModelParams(std::string filename){
 	model_file.close();
 	num_of_states = states.size();
 	init_transition_prob = LogNum(1/num_of_states);
-	BOOST_LOG_TRIVIAL(info) << "Loaded model with " << (int)states.size() << " states and kmer size " << kmer_size;
+	BOOST_LOG_TRIVIAL(info) << "Loaded model with " << (int)states.size()
+							<< " states and kmer size " << kmer_size 
+							<< " in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 }
 
 void HMM::adjust_scaling(std::vector<double>& event_sequence){
@@ -119,31 +125,29 @@ int HMM::kmer_overlap(std::string from, std::string to){
 
 void HMM::compute_transitions(){
 	BOOST_LOG_TRIVIAL(info) << "Computing state transition probabilites...";
-	//initialize all probabilites to zero
+	auto start = system_clock::now();
+
 	transitions.resize(states.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
 	inverse_neighbors.resize(states.size());
 
-	for (int state_from = 1; state_from < states.size(); state_from++){
+	for (int state_from = 0; state_from < states.size(); state_from++){
 		std::vector<int>normal_states;
 		std::vector<int>skip_states;
-		for (int state_to = 1; state_to < states.size(); state_to ++){
+		for (int state_to = 0; state_to < states.size(); state_to ++){
 			std::string kmer_from = states[state_from].kmer_label;
 			std::string kmer_to = states[state_to].kmer_label;
 			int overlap = kmer_overlap(kmer_from, kmer_to);
 			switch(overlap){
 				case 0 : {
-					//std::cout << "Transition " << kmer_from << " -> "<< kmer_to << " is a loop" << std::endl;
 					transitions[state_from][state_to] = LogNum(prob_stay);
 					inverse_neighbors[state_to].push_back({state_from, LogNum(prob_stay)});
 					break;
 				}
 				case 1 : {
-					//std::cout << "Transition " << kmer_from << " -> "<< kmer_to << " is normal" << std::endl;
 					normal_states.push_back(state_to);
 					break;
 				}
 				case 2 : {
-					//std::cout << "Transition " << kmer_from << " -> "<< kmer_to << " is skip" << std::endl;
 					skip_states.push_back(state_to);
 					break;
 				}
@@ -158,13 +162,13 @@ void HMM::compute_transitions(){
 			inverse_neighbors[skip_states[i]].push_back({state_from, LogNum(prob_skip / skip_states.size())});
 		}
 	}
-
-	BOOST_LOG_TRIVIAL(info) << "Transition computation done";
+	BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 }
 
 std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 
 	BOOST_LOG_TRIVIAL(info) << "Running viterbi" << "\n";
+	auto start = system_clock::now();
 
 	Matrix<LogNum>viterbi_matrix(states.size(), std::vector<LogNum>(event_sequence.size(), LogNum(0.0)));
 	Matrix<int> back_ptr(event_sequence.size(), std::vector<int>(states.size(), 0));
@@ -186,17 +190,6 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 			viterbi_matrix[l][i] = m + states[l].get_emission_probability(event_sequence[i]);
 		}
 	}
-	/*
-	printf("%5c ", '0');
-	for (int i = 0; i < event_sequence.size(); i++) printf("%2.3f ", event_sequence[i]);
-	printf("\n");
-	for (int i = 0; i < viterbi_matrix.size(); i++){
-		printf("%5d ", i);
-		for (int j = 0; j < viterbi_matrix[i].size(); j++){
-			printf("%1.4f ", viterbi_matrix[i][j].exponentiate());
-		}
-		printf("\n");
-	}*/
 
 	LogNum m(0.0);
 	int last_state = 0;
@@ -216,12 +209,13 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 		prev_state = s;
 	}
 	reverse(state_sequence.begin(), state_sequence.end());
-	BOOST_LOG_TRIVIAL(info) << "Viterbi path complete";
+	BOOST_LOG_TRIVIAL(info) << "Viterbi path complete in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 	return state_sequence;
 }
 
 Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& event_sequence){
 	BOOST_LOG_TRIVIAL(info) << "Computing forward matrix";
+	auto start = system_clock::now();
 
 	Matrix<LogNum>fwd_matrix(event_sequence.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
 
@@ -230,44 +224,34 @@ Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& ev
 		fwd_matrix[0][i] = init_transition_prob + states[i].get_emission_probability(event_sequence[0]);
 	}
 	for (int i = 1; i < event_sequence.size(); i++){
-		//BOOST_LOG_TRIVIAL(info) << "Starting row "<<i;
 		for (int l = 0; l < states.size(); l++){
-			//BOOST_LOG_TRIVIAL(info) << "  Starting for state "<<l;
 			LogNum sum(0.0);
 			std::vector<LogNum>probabilites;
 			for (int j = 0; j < inverse_neighbors[l].size(); j++){
-				//BOOST_LOG_TRIVIAL(info) << "  Neighbor index "<<j;
 				std::pair<int, LogNum>p = inverse_neighbors[l][j];
 				int k = p.first;
-				//BOOST_LOG_TRIVIAL(info) << "  Visiting neighbor "<<k;
 				LogNum t_prob = p.second;
 				sum += fwd_matrix[i - 1][k] + t_prob;
 				probabilites.push_back(fwd_matrix[i - 1][k] + t_prob);
-				//BOOST_LOG_TRIVIAL(info) << "  Path probability saved ";
 			}
-			//BOOST_LOG_TRIVIAL(info) << "Probabilities calculated";
 			fwd_matrix[i][l] = sum + states[l].get_emission_probability(event_sequence[i]);
 			LogNum prob_sum = std::accumulate(probabilites.begin(), probabilites.end(), LogNum(0.0));
-			//BOOST_LOG_TRIVIAL(info) << "Beginning normalisation";
 			probability_weights[i][l].resize(probabilites.size());
 			if (!prob_sum.isZero()){
-				//BOOST_LOG_TRIVIAL(info) << "Not zero!";
 				std::transform(probabilites.begin(),
 								probabilites.end(),
 								probability_weights[i][l].begin(),
 								[prob_sum](LogNum x){
-									//BOOST_LOG_TRIVIAL(info) << (x.exponentiate()/prob_sum.exponentiate());
-									return (x.exponentiate()/prob_sum.exponentiate());});
+									return (x.value()/prob_sum.value());});
 			}
 		}
-		BOOST_LOG_TRIVIAL(info) << "Row " << i << " done";
+		BOOST_LOG_TRIVIAL(info) << "Row " << i << " done out of " << event_sequence.size();
 	}
-	BOOST_LOG_TRIVIAL(info) << "Forward matrix calculation done";
+	BOOST_LOG_TRIVIAL(info) << "Forward matrix calculation done in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 	return probability_weights;
 }
 
 std::vector<char> HMM::translate_to_bases(std::vector<int>&state_sequence) const{
-	BOOST_LOG_TRIVIAL(info) << "Translating state sequence into DNA bases";
 	int prev_state = state_sequence[0];
 	std::vector<char> dna_seq;
 	for (int i = 0; i < states[prev_state].kmer_label.size(); i++) dna_seq.push_back(states[prev_state].kmer_label[i]);
@@ -286,18 +270,15 @@ std::vector<char> HMM::translate_to_bases(std::vector<int>&state_sequence) const
 		}
 		prev_state = curr_state;
 	}
-	BOOST_LOG_TRIVIAL(info) << "Translation done";
 	return dna_seq;
 
 }
 
 std::vector<int> HMM::backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen){
-	BOOST_LOG_TRIVIAL(info) << "Backtracking sample!";
 	std::vector<int>sample;
 	int curr_state = last_state;
 	while (l >= 0){
 		sample.push_back(curr_state);
-		BOOST_LOG_TRIVIAL(info) << "Added state " << curr_state;
 		std::discrete_distribution<>sample_next_state(prob_weights[l][curr_state].begin(), prob_weights[l][curr_state].end());
 		curr_state = inverse_neighbors[curr_state][sample_next_state(gen)].first;
 		l--;
@@ -307,34 +288,24 @@ std::vector<int> HMM::backtrack_sample(int last_state, int l, Matrix<std::vector
 }
 
 Matrix<int> HMM::generate_samples(int num_of_samples, std::vector<double>&event_sequence, int seed){
+	BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<"samples";
+	auto start = system_clock::now();
 	Matrix<int>res;
 	Matrix<std::vector<double> > prob_weights = compute_forward_matrix(event_sequence);
-	BOOST_LOG_TRIVIAL(info) << "Calculating last state weights";
 	Matrix<double> last_states = prob_weights.back();
-	BOOST_LOG_TRIVIAL(info) << last_states.size();
 	std::vector<double> last_state_weights(last_states.size());
 	std::transform(last_states.begin(), last_states.end(), last_state_weights.begin(),
 				  [this](std::vector<double>x){
-				  	double s = std::accumulate(x.begin(), x.end(), 0);
-				  	return s/(num_of_states-1);
+				  	double s = std::accumulate(x.begin(), x.end(), 0.0);
+				  	return s/num_of_states;
 				  });
 
-	BOOST_LOG_TRIVIAL(info) << "Sampler for last state";
 	std::default_random_engine gen(seed);
 	std::discrete_distribution<> choose_last_state(last_state_weights.begin(), last_state_weights.end());
 	
 	for (int i = 0; i < num_of_samples; i++){
-		int last_state = choose_last_state(gen);
-		BOOST_LOG_TRIVIAL(info) << "Chose last state" << last_state;
-		res.push_back(backtrack_sample(last_state, (int)event_sequence.size() - 1, prob_weights, gen));
+		res.push_back(backtrack_sample(choose_last_state(gen), (int)event_sequence.size() - 1, prob_weights, gen));
 	}
-	/*
-		I'm in a state s for length l
-		I add the state into the sample
-		I look into the wieghts table for entry [l][s]
-		I sample a number from those wieghts, that number is index into inverse_neighbors[s]
-		I move into that inverse neighbor
-		if l > 0 jump to beginning with new state and l-1
-	*/
+	BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<"samples took " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 	return res;
 }

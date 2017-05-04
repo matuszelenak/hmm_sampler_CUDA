@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdio>
 #include <boost/program_options.hpp>
+#include <cassert>
 #include <boost/log/trivial.hpp>
 
 #include "HMM.h"
@@ -11,8 +12,48 @@
 
 #define BOOST_LOG_DYN_LINK 1
 
-void print_usage(){
-
+std::vector<double>load_fast5(std::string file_name, long long limit){
+	std::vector<double>event_data;
+	if (not fast5::File::is_valid_file(file_name))
+    {
+        BOOST_LOG_TRIVIAL(info) << "not a fast5 file [" << file_name << "]";
+        return event_data;
+    }
+    {
+        fast5::File f;
+        try
+        {
+            f.open(file_name);
+            assert(f.is_open());
+            bool have_basecall_group = f.have_basecall_group();
+            if (have_basecall_group)
+            {
+                auto bc_gr_list = f.get_basecall_group_list();
+                for (unsigned st = 0; st < 3; ++st)
+                {
+                    auto gr_l = f.get_basecall_strand_group_list(st);
+                    bool have_events = f.have_basecall_events(st);
+                    if (have_events)
+                    {
+                        auto ev = f.get_basecall_events(st);
+                        for (const auto& e : ev)
+                        {
+                        	event_data.push_back(e.mean);
+                        }
+                    }
+                }
+            }
+        }
+        catch (hdf5_tools::Exception& e)
+        {
+            BOOST_LOG_TRIVIAL(info) << "hdf5 error: " << e.what();
+        }
+    }
+    assert(fast5::File::get_object_count() == 0);
+    if (limit != -1){
+    	event_data.resize(limit);
+    }
+    return event_data;
 }
 
 std::vector<double>loadEventData(std::string filename){
@@ -58,6 +99,7 @@ int main(int argc, char const *argv[])
 		("scale", "Adjust model scaling according to event data")
 		("skip", po::value<double>(),"Set custom skip probability for model")
 		("stay", po::value<double>(), "Set custom stay probability for model")
+		("head,h",po::value<long long>(), "Set a limit on number of events processed");
 	;
 	po::positional_options_description p;
 	p.add("input-file", -1);
@@ -80,7 +122,7 @@ int main(int argc, char const *argv[])
 	}
 
 	HMM hmm;
-	hmm.loadModelParams(model_name);
+	hmm.load_model_params(model_name);
 
 	if (vm.count("skip")) hmm.set_skip_prob(vm["skip"].as<double>());
 
@@ -88,12 +130,17 @@ int main(int argc, char const *argv[])
 
 	hmm.compute_transitions();
 
+	long long limit = -1;
+	if (vm.count("head")){
+		limit = vm["head"].as<long long>();
+	}
+
 	std::vector<std::vector<double> >input_file_data;
 	std::vector<std::string>input_file_names;
 	if (vm.count("input-file")){
 		input_file_names = vm["input-file"].as< std::vector<std::string> >();
 		for (int f = 0; f < input_file_names.size(); f++){
-			input_file_data.push_back(loadEventData(input_file_names[f]));
+			input_file_data.push_back(load_fast5(input_file_names[f], limit));
 		}
 	}
 

@@ -9,11 +9,10 @@ const double kEpsilon = 1.0e-15;
 class LogNum{
 public:
 	double exponent;
-	//LogNum(double n);
 
 	bool isZero() const;
 
-	double exponentiate() const;
+	double value() const;
 
 	LogNum(double n);
 
