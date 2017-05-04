@@ -170,10 +170,10 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 	BOOST_LOG_TRIVIAL(info) << "Running viterbi" << "\n";
 	auto start = system_clock::now();
 
-	Matrix<LogNum>viterbi_matrix(states.size(), std::vector<LogNum>(event_sequence.size(), LogNum(0.0)));
+	Matrix<LogNum>viterbi_matrix(event_sequence.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
 	Matrix<int> back_ptr(event_sequence.size(), std::vector<int>(states.size(), 0));
 	for (int i = 0; i < states.size(); i++){
-		viterbi_matrix[i][0] = init_transition_prob + states[i].get_emission_probability(event_sequence[0]);
+		viterbi_matrix[0][i] = init_transition_prob + states[i].get_emission_probability(event_sequence[0]);
 	}
 	for (int i = 1; i < event_sequence.size(); i++){
 		for (int l = 0; l < states.size(); l++){
@@ -182,20 +182,20 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 				std::pair<int, LogNum>p = inverse_neighbors[l][j];
 				int k = p.first;
 				LogNum t_prob = p.second;
-				if (viterbi_matrix[k][i - 1] + t_prob > m){
-					m = viterbi_matrix[k][i - 1] + t_prob;
+				if (viterbi_matrix[i - 1][k] + t_prob > m){
+					m = viterbi_matrix[i - 1][k] + t_prob;
 					back_ptr[i][l] = k;
 				}
 			}
-			viterbi_matrix[l][i] = m + states[l].get_emission_probability(event_sequence[i]);
+			viterbi_matrix[i][l] = m + states[l].get_emission_probability(event_sequence[i]);
 		}
 	}
 
 	LogNum m(0.0);
 	int last_state = 0;
 	for (int k = 0; k < states.size(); k++){
-		if (m < viterbi_matrix[k][event_sequence.size() - 1]){
-			m = viterbi_matrix[k][event_sequence.size() - 1];
+		if (m < viterbi_matrix[event_sequence.size() - 1][k]){
+			m = viterbi_matrix[event_sequence.size() - 1][k];
 			last_state = k;
 		}
 	}
