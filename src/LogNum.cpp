@@ -42,6 +42,13 @@ LogNum operator*(LogNum &a, const LogNum &b){
 	return r;
 }
 
+LogNum operator/(LogNum &a, const LogNum &b){
+	LogNum r(0.0);
+	r.exponent = a.exponent;
+	r/=b;
+	return r;
+}
+
 LogNum& LogNum::operator*=(const LogNum& a){
 	if (this->isZero() || a.isZero()){
 		this -> exponent = - HUGE_VAL;
@@ -49,6 +56,11 @@ LogNum& LogNum::operator*=(const LogNum& a){
 	else{
 		this -> exponent += a.exponent;
 	}
+	return *this;
+}
+
+LogNum& LogNum::operator/=(const LogNum& a){
+	if (!this -> isZero()) this -> exponent -= a.exponent;
 	return *this;
 }
 

@@ -21,12 +21,16 @@ public:
 
 	LogNum& operator*=(const LogNum& a);
 
+	LogNum& operator/=(const LogNum& a);
+
 	bool operator<(const LogNum& a)const;
 	bool operator>(const LogNum& a)const;
 
 	friend LogNum operator+(LogNum &a, const LogNum &b);
 
 	friend LogNum operator*(LogNum &a, const LogNum &b);
+
+	friend LogNum operator/(LogNum &a, const LogNum &b);
 
 	bool operator==(const LogNum& num) const;
 

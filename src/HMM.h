@@ -17,10 +17,13 @@ using Matrix = std::vector<std::vector<val> >;
 class HMM{
 private:
 	int kmer_size;
+	int num_of_states = 0;
 	std::set<char>bases;
 	std::vector<State>states;
-	std::vector<std::vector<LogNum> >transitions;
-	Matrix<LogNum>inverse_transitions;
+	Matrix<LogNum>transitions;
+	Matrix<std::pair<int, LogNum> >inverse_neighbors;
+	LogNum init_transition_prob = LogNum(0.0);
+
 	std::map<std::string, int> kmer_to_state;
 
 	double scale = 1;
@@ -35,10 +38,11 @@ private:
 public:
 	void loadModelParams(std::string filename);
 	void compute_transitions();
-	Matrix<LogNum> compute_forward_matrix(std::vector<double>&event_sequence);
+	Matrix<std::vector<double> > compute_forward_matrix(std::vector<double>& event_sequence);
 	std::vector<int> compute_viterbi_path(std::vector<double>&event_sequence);
-	Matrix<int> generate_samples(int num_of_samples, Matrix<LogNum>&forward_matrix);
-	std::vector<char> translate_to_bases(std::vector<int>&state_sequence);
+	std::vector<int> backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen);
+	Matrix<int> generate_samples(int num_of_samples, std::vector<double>&event_sequence, int seed);
+	std::vector<char> translate_to_bases(std::vector<int>&state_sequence) const;
 	void adjust_scaling(std::vector<double>& event_sequence);
 	void set_stay_prob(double prob);
 	void set_skip_prob(double prob);

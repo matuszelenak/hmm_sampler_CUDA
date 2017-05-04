@@ -7,6 +7,7 @@
 #include <boost/log/trivial.hpp>
 
 #include "HMM.h"
+#include "./fast5/src/fast5.hpp"
 
 #define BOOST_LOG_DYN_LINK 1
 
@@ -115,6 +116,27 @@ int main(int argc, char const *argv[])
 				std::vector<std::string>seq_names = {input_file_names[i]};
 				std::vector<std::vector<char> >seq_data = {viterbi_results[i]};
 				save_to_fasta(input_file_names[i], seq_names, seq_data);
+			}
+		}
+	}
+
+	if (vm.count("sample")){
+		int num_of_samples = vm["sample"].as<int>();
+		for (int f = 0; f < input_file_data.size(); f++){
+			if (vm.count("scale")){
+				hmm.adjust_scaling(input_file_data[f]);
+			}
+			Matrix<int>samples = hmm.generate_samples(num_of_samples, input_file_data[f], rand());
+			Matrix<char>translated_samples(samples.size());
+			std::transform(samples.begin(), samples.end(), translated_samples.begin(),
+							[hmm](std::vector<int>x){return hmm.translate_to_bases(x);});
+
+			if (vm.count("fasta")){
+				std::vector<std::string>seq_names;
+				for (int i = 0; i < samples.size(); i++){
+					seq_names.push_back(input_file_names[f] + "_sample_" + std::to_string(i));
+				}
+				save_to_fasta(input_file_names[f], seq_names, translated_samples);
 			}
 		}
 	}

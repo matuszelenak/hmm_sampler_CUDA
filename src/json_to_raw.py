@@ -5,7 +5,7 @@ f = open(s, 'r')
 
 k = json.loads("".join(f.readlines()));
 o = open(s + ".out", 'w+')
-for mean in k['mean'][:7]:
+for mean in k['mean'][:100]:
 	o.write(str(mean)+ "\n");
 print(max(k['mean']), min(k['mean']))
 f.close()
