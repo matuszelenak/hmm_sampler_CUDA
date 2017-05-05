@@ -14,6 +14,7 @@
 #include "State.h"
 #include "LogNum.h"
 #include "HMM.h"
+#include "gpu_algorithms.h"
 
 using std::chrono::system_clock;
 using std::chrono::duration_cast;
