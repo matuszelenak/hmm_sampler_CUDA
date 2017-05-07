@@ -34,6 +34,7 @@ private:
 	std::vector<std::string> split_string(std::string &s, char delimiter);
 	std::vector<std::string> generate_suffixes();
 	int kmer_overlap(std::string from, std::string to);
+	std::vector<std::vector<int> > cpu_samples(int num_of_samples, std::vector<double> &event_sequence, int seed);
 
 public:
 	void load_model_params(std::string filename);
@@ -46,9 +47,11 @@ public:
 
 	std::vector<int> backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen);
 
-	Matrix<int> generate_samples(int num_of_samples, std::vector<double>&event_sequence, int seed);
+	std::vector<std::vector<int> > generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method);
 
-	std::vector<char> translate_to_bases(std::vector<int>&state_sequence) const;
+	std::vector<char> translate_to_bases(int *state_sequence, int seq_length) const;
+
+	std::vector<char> translate_to_bases(std::vector<int> state_sequence) const;
 
 	void adjust_scaling(std::vector<double>& event_sequence);
 	
@@ -56,10 +59,6 @@ public:
 	void set_skip_prob(double prob);
 
 	void gpu_viterbi(std::vector<double>& event_sequence);
-
-	void gpu_forward(std::vector<double>&event_sequence);
-
-	void gpu_sample(int num_of_samples, std::vector<double>&event_sequence);
 
 	void dump_emissions(std::vector<double>&event_sequence);
 };

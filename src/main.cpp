@@ -178,7 +178,7 @@ int main(int argc, char const *argv[])
 			if (vm.count("scale")){
 				hmm.adjust_scaling(input_file_data[f]);
 			}
-			Matrix<int>samples = hmm.generate_samples(num_of_samples, input_file_data[f], rand());
+			Matrix<int> samples = hmm.generate_samples(num_of_samples, input_file_data[f], method);
 			Matrix<char>translated_samples(samples.size());
 			std::transform(samples.begin(), samples.end(), translated_samples.begin(),
 							[hmm](std::vector<int>x){return hmm.translate_to_bases(x);});

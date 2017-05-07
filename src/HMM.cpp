@@ -163,7 +163,7 @@ void HMM::compute_transitions(){
 			inverse_neighbors[skip_states[i]].push_back({state_from, LogNum(prob_skip / skip_states.size())});
 		}
 	}
-	BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
+	//BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 }
 
 void HMM::gpu_viterbi(std::vector<double>& event_sequence){
@@ -242,10 +242,6 @@ std::vector<int> HMM::cpu_viterbi_path(std::vector<double>& event_sequence){
 	return state_sequence;
 }
 
-void HMM::gpu_forward(std::vector<double>&event_sequence){
-	std::vector<std::vector<std::vector<double> > > r;// = gpu_forward_matrix(states, inverse_neighbors, event_sequence);
-}
-
 Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& event_sequence){
 	BOOST_LOG_TRIVIAL(info) << "Computing forward matrix";
 	auto start = system_clock::now();
@@ -273,12 +269,15 @@ Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& ev
 			LogNum prob_sum = std::accumulate(probabilites.begin(), probabilites.end(), LogNum(0.0));
 			probability_weights[i][l].resize(probabilites.size());
 			if (!prob_sum.isZero()){
-				
 				std::transform(probabilites.begin(),
 								probabilites.end(),
 								probability_weights[i][l].begin(),
 								[prob_sum](LogNum x){
 									return (x/prob_sum).value();});
+				double s = std::accumulate(probability_weights[i][l].begin(), probability_weights[i][l].end(), 0.0);
+				std::transform(probability_weights[i][l].begin(), probability_weights[i][l].end(), probability_weights[i][l].begin(),
+								[s](double x){
+									return (x/s);});
 			}
 		}
 		BOOST_LOG_TRIVIAL(info) << "Row " << i << " done out of " << event_sequence.size();
@@ -306,7 +305,29 @@ Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& ev
 	return probability_weights;
 }
 
-std::vector<char> HMM::translate_to_bases(std::vector<int>&state_sequence) const{
+std::vector<char> HMM::translate_to_bases(int *state_sequence, int seq_length) const{
+	int prev_state = state_sequence[0];
+	std::vector<char> dna_seq;
+	for (int i = 0; i < states[prev_state].kmer_label.size(); i++) dna_seq.push_back(states[prev_state].kmer_label[i]);
+	for (int i = 1; i < seq_length; i++){
+		int curr_state = state_sequence[i];
+		for (int prefix = 1; prefix <= kmer_size; prefix++){
+			std::string prev_suffix = (states[prev_state].kmer_label).substr(prefix, kmer_size - prefix);
+			std::string curr_prefix = (states[curr_state].kmer_label).substr(0, kmer_size - prefix);
+			if (prev_suffix == curr_prefix){
+				std::string appendage = (states[curr_state].kmer_label).substr(kmer_size - prefix, prefix);
+				for (int k = 0; k < appendage.size(); k++){
+					dna_seq.push_back(appendage[k]);
+				}
+				break;
+			}
+		}
+		prev_state = curr_state;
+	}
+	return dna_seq;
+}
+
+std::vector<char> HMM::translate_to_bases(std::vector<int> state_sequence) const{
 	int prev_state = state_sequence[0];
 	std::vector<char> dna_seq;
 	for (int i = 0; i < states[prev_state].kmer_label.size(); i++) dna_seq.push_back(states[prev_state].kmer_label[i]);
@@ -326,7 +347,6 @@ std::vector<char> HMM::translate_to_bases(std::vector<int>&state_sequence) const
 		prev_state = curr_state;
 	}
 	return dna_seq;
-
 }
 
 std::vector<int> HMM::backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen){
@@ -342,7 +362,7 @@ std::vector<int> HMM::backtrack_sample(int last_state, int l, Matrix<std::vector
 	return sample;
 }
 
-Matrix<int> HMM::generate_samples(int num_of_samples, std::vector<double>&event_sequence, int seed){
+std::vector<std::vector<int> > HMM::cpu_samples(int num_of_samples, std::vector<double>&event_sequence, int seed){
 	BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<"samples";
 	auto start = system_clock::now();
 	Matrix<int>res;
@@ -367,8 +387,16 @@ Matrix<int> HMM::generate_samples(int num_of_samples, std::vector<double>&event_
 	return res;
 }
 
-void HMM::gpu_sample(int num_of_samples, std::vector<double>&event_sequence){
-	std::vector<std::vector<int> > r = gpu_samples(num_of_samples, states, inverse_neighbors, event_sequence);
+std::vector<std::vector<int> > HMM::generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method){
+	if (method == "GPU"){
+		auto start = system_clock::now();
+		std::vector<std::vector<int> > r = gpu_samples(num_of_samples, states, inverse_neighbors, event_sequence);
+		BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<" samples of length "<< event_sequence.size() <<" on GPU took " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
+		return r;
+	}
+	else{
+		return cpu_samples(num_of_samples, event_sequence, rand());
+	}
 }
 
 void HMM::dump_emissions(std::vector<double>&event_sequence){
