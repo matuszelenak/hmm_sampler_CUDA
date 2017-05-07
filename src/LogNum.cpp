@@ -1,5 +1,9 @@
 #include "LogNum.h"
 
+LogNum::LogNum(){
+	exponent = -HUGE_VAL;
+}
+
 LogNum::LogNum(double n){
 	exponent = log(n);
 }

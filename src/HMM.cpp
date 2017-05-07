@@ -74,7 +74,7 @@ void HMM::load_model_params(std::string filename){
 	kmer_size = kmer_label.size();
 	model_file.close();
 	num_of_states = states.size();
-	init_transition_prob = LogNum(1/num_of_states);
+	init_transition_prob = LogNum(1.0/(double)num_of_states);
 	BOOST_LOG_TRIVIAL(info) << "Loaded model with " << (int)states.size()
 							<< " states and kmer size " << kmer_size 
 							<< " in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
@@ -166,15 +166,42 @@ void HMM::compute_transitions(){
 	BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 }
 
-std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
+void HMM::gpu_viterbi(std::vector<double>& event_sequence){
+	std::vector<int> res = gpu_viterbi_path(states, inverse_neighbors, event_sequence);
+}
 
-	BOOST_LOG_TRIVIAL(info) << "Running viterbi" << "\n";
+void save_matrix(Matrix<LogNum>viterbi_matrix){
+	FILE * pFile;
+	pFile = fopen ("viterbi_cpu","w");
+	for (int i = 0; i < viterbi_matrix.size(); i++){
+		for (int j = 0; j < std::max(30,(int)viterbi_matrix[i].size()); j++){
+			fprintf (pFile, "%.2f", viterbi_matrix[i][j].exponent);
+		}
+		fprintf(pFile, "\n");
+	}
+	fclose (pFile);
+}
+
+std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence, std::string method){
+	if (method == "GPU"){
+		BOOST_LOG_TRIVIAL(info) << "Running viterbi on GPU" << "\n";
+		auto start = system_clock::now();
+		std::vector<int> res = gpu_viterbi_path(states, inverse_neighbors, event_sequence);
+		BOOST_LOG_TRIVIAL(info) << "Viterbi path complete in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
+		return res;
+	}
+	return cpu_viterbi_path(event_sequence);
+}
+
+std::vector<int> HMM::cpu_viterbi_path(std::vector<double>& event_sequence){
+
+	BOOST_LOG_TRIVIAL(info) << "Running viterbi on CPU" << "\n";
 	auto start = system_clock::now();
 
 	Matrix<LogNum>viterbi_matrix(event_sequence.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
 	Matrix<int> back_ptr(event_sequence.size(), std::vector<int>(states.size(), 0));
 	for (int i = 0; i < states.size(); i++){
-		viterbi_matrix[0][i] = init_transition_prob + states[i].get_emission_probability(event_sequence[0]);
+		viterbi_matrix[0][i] = init_transition_prob * states[i].get_emission_probability(event_sequence[0]);
 	}
 	for (int i = 1; i < event_sequence.size(); i++){
 		for (int l = 0; l < states.size(); l++){
@@ -183,14 +210,15 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence){
 				std::pair<int, LogNum>p = inverse_neighbors[l][j];
 				int k = p.first;
 				LogNum t_prob = p.second;
-				if (viterbi_matrix[i - 1][k] + t_prob > m){
-					m = viterbi_matrix[i - 1][k] + t_prob;
+				if (viterbi_matrix[i - 1][k] * t_prob > m){
+					m = viterbi_matrix[i - 1][k] * t_prob;
 					back_ptr[i][l] = k;
 				}
 			}
-			viterbi_matrix[i][l] = m + states[l].get_emission_probability(event_sequence[i]);
+			viterbi_matrix[i][l] = m * states[l].get_emission_probability(event_sequence[i]);
 		}
 	}
+	save_matrix(viterbi_matrix);
 
 	LogNum m(0.0);
 	int last_state = 0;
@@ -222,7 +250,7 @@ Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& ev
 
 	Matrix<std::vector<double> >probability_weights(event_sequence.size(), std::vector<std::vector<double> >(states.size()));
 	for (int i = 0; i < states.size(); i++){
-		fwd_matrix[0][i] = init_transition_prob + states[i].get_emission_probability(event_sequence[0]);
+		fwd_matrix[0][i] = init_transition_prob * states[i].get_emission_probability(event_sequence[0]);
 	}
 	for (int i = 1; i < event_sequence.size(); i++){
 		for (int l = 0; l < states.size(); l++){
@@ -232,10 +260,10 @@ Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& ev
 				std::pair<int, LogNum>p = inverse_neighbors[l][j];
 				int k = p.first;
 				LogNum t_prob = p.second;
-				sum += fwd_matrix[i - 1][k] + t_prob;
-				probabilites.push_back(fwd_matrix[i - 1][k] + t_prob);
+				sum += fwd_matrix[i - 1][k] * t_prob;
+				probabilites.push_back(fwd_matrix[i - 1][k] * t_prob);
 			}
-			fwd_matrix[i][l] = sum + states[l].get_emission_probability(event_sequence[i]);
+			fwd_matrix[i][l] = sum * states[l].get_emission_probability(event_sequence[i]);
 			LogNum prob_sum = std::accumulate(probabilites.begin(), probabilites.end(), LogNum(0.0));
 			probability_weights[i][l].resize(probabilites.size());
 			if (!prob_sum.isZero()){

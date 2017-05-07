@@ -14,6 +14,8 @@ public:
 
 	double value() const;
 
+	LogNum();
+
 	LogNum(double n);
 
 	LogNum& operator+=(const LogNum& a);

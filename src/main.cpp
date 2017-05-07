@@ -99,7 +99,8 @@ int main(int argc, char const *argv[])
 		("scale", "Adjust model scaling according to event data")
 		("skip", po::value<double>(),"Set custom skip probability for model")
 		("stay", po::value<double>(), "Set custom stay probability for model")
-		("head,h",po::value<long long>(), "Set a limit on number of events processed");
+		("head,h",po::value<long long>(), "Set a limit on number of events processed")
+		("method",po::value<std::string>(), "Method for calculation CPU|GPU")
 	;
 	po::positional_options_description p;
 	p.add("input-file", -1);
@@ -143,6 +144,10 @@ int main(int argc, char const *argv[])
 			input_file_data.push_back(load_fast5(input_file_names[f], limit));
 		}
 	}
+	std::string method;
+	if (vm.count("method")){
+		method = vm["method"].as< std::string >();
+	}
 
 	std::vector<std::vector<char> >viterbi_results;
 	if (vm.count("viterbi")){
@@ -150,7 +155,7 @@ int main(int argc, char const *argv[])
 			if (vm.count("scale")){
 				hmm.adjust_scaling(input_file_data[f]);
 			}
-			std::vector<int>v_path = hmm.compute_viterbi_path(input_file_data[f]);
+			std::vector<int>v_path = hmm.compute_viterbi_path(input_file_data[f], method);
 			for (int i = 0; i < v_path.size(); i++){
 				printf("%d ", v_path[i]);
 			}

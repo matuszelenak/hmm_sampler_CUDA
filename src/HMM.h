@@ -40,7 +40,9 @@ public:
 	void compute_transitions();
 	Matrix<std::vector<double> > compute_forward_matrix(std::vector<double>& event_sequence);
 
-	std::vector<int> compute_viterbi_path(std::vector<double>&event_sequence);
+	std::vector<int> compute_viterbi_path(std::vector<double>&event_sequence, std::string method);
+
+	std::vector<int> cpu_viterbi_path(std::vector<double>&event_sequence);
 
 	std::vector<int> backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen);
 
@@ -52,6 +54,8 @@ public:
 	
 	void set_stay_prob(double prob);
 	void set_skip_prob(double prob);
+
+	void gpu_viterbi(std::vector<double>& event_sequence);
 };
 
 #endif
