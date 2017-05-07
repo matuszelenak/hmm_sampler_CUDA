@@ -242,6 +242,10 @@ std::vector<int> HMM::cpu_viterbi_path(std::vector<double>& event_sequence){
 	return state_sequence;
 }
 
+void HMM::gpu_forward(std::vector<double>&event_sequence){
+	std::vector<std::vector<std::vector<double> > > r;// = gpu_forward_matrix(states, inverse_neighbors, event_sequence);
+}
+
 Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& event_sequence){
 	BOOST_LOG_TRIVIAL(info) << "Computing forward matrix";
 	auto start = system_clock::now();
@@ -260,22 +264,44 @@ Matrix<std::vector<double> > HMM::compute_forward_matrix(std::vector<double>& ev
 				std::pair<int, LogNum>p = inverse_neighbors[l][j];
 				int k = p.first;
 				LogNum t_prob = p.second;
-				sum += fwd_matrix[i - 1][k] * t_prob;
-				probabilites.push_back(fwd_matrix[i - 1][k] * t_prob);
+				LogNum temp = fwd_matrix[i - 1][k] * t_prob;
+				LogNum temp2 = temp * states[l].get_emission_probability(event_sequence[i]);
+				sum += temp2;
+				probabilites.push_back(temp2);
 			}
-			fwd_matrix[i][l] = sum * states[l].get_emission_probability(event_sequence[i]);
+			fwd_matrix[i][l] = sum;
 			LogNum prob_sum = std::accumulate(probabilites.begin(), probabilites.end(), LogNum(0.0));
 			probability_weights[i][l].resize(probabilites.size());
 			if (!prob_sum.isZero()){
+				
 				std::transform(probabilites.begin(),
 								probabilites.end(),
 								probability_weights[i][l].begin(),
 								[prob_sum](LogNum x){
-									return (x.value()/prob_sum.value());});
+									return (x/prob_sum).value();});
 			}
 		}
 		BOOST_LOG_TRIVIAL(info) << "Row " << i << " done out of " << event_sequence.size();
 	}
+	/*
+	for (int i = 0; i < event_sequence.size(); i++){
+		for (int j = 0; j < num_of_states; j++){
+			printf("[");
+			for (int k = 0; k < probability_weights[i][j].size(); k++){
+				printf("%.4f,", probability_weights[i][j][k]);
+			}
+			printf("],");
+			//printf("%.4f ", (std::accumulate(probability_weights[i][j].begin(), probability_weights[i][j].end(), LogNum(0.0))).value());
+		}
+		printf("\n");
+	}
+	
+	for (int i = 0; i < event_sequence.size(); i++){
+		for (int j = 0; j < num_of_states; j++){
+			printf("%.4f ", fwd_matrix[i][j].exponent);
+		}
+		printf("\n");
+	}*/
 	BOOST_LOG_TRIVIAL(info) << "Forward matrix calculation done in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 	return probability_weights;
 }
@@ -322,6 +348,8 @@ Matrix<int> HMM::generate_samples(int num_of_samples, std::vector<double>&event_
 	Matrix<int>res;
 	Matrix<std::vector<double> > prob_weights = compute_forward_matrix(event_sequence);
 	Matrix<double> last_states = prob_weights.back();
+
+	//TOTO FIXNUT!!! BRAT LAST ROW Z FWD NIE ZO SAMPLING
 	std::vector<double> last_state_weights(last_states.size());
 	std::transform(last_states.begin(), last_states.end(), last_state_weights.begin(),
 				  [this](std::vector<double>x){
@@ -337,4 +365,16 @@ Matrix<int> HMM::generate_samples(int num_of_samples, std::vector<double>&event_
 	}
 	BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<"samples took " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 	return res;
+}
+
+void HMM::gpu_sample(int num_of_samples, std::vector<double>&event_sequence){
+	std::vector<std::vector<int> > r = gpu_samples(num_of_samples, states, inverse_neighbors, event_sequence);
+}
+
+void HMM::dump_emissions(std::vector<double>&event_sequence){
+	for (int i = 0; i < event_sequence.size(); i++){
+		for (int s = 0; s < states.size(); s++){
+			printf("State %d for emission %f prob %f\n", s, event_sequence[i], states[s].get_emission_probability(event_sequence[i]).value());
+		}
+	}
 }

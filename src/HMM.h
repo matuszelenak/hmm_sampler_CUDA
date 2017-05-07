@@ -56,6 +56,12 @@ public:
 	void set_skip_prob(double prob);
 
 	void gpu_viterbi(std::vector<double>& event_sequence);
+
+	void gpu_forward(std::vector<double>&event_sequence);
+
+	void gpu_sample(int num_of_samples, std::vector<double>&event_sequence);
+
+	void dump_emissions(std::vector<double>&event_sequence);
 };
 
 #endif
