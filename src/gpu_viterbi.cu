@@ -34,7 +34,7 @@ void calculate_viterbi_prob(viterbi_entry *d_viterbi_matrix,
 							inv_transition *d_inverse_neighbors,
 							state_params *d_states,
 							int num_of_states,
-							int num_of_neighbors,
+							int max_in_degree,
 							int i,
 							double emission)
 {
@@ -43,8 +43,9 @@ void calculate_viterbi_prob(viterbi_entry *d_viterbi_matrix,
 		int maxk = 0;
 		double m = -INFINITY;
 		double gen_prob;
-		for (int j = 0; j < num_of_neighbors; j++){
-			inv_transition t = d_inverse_neighbors[l*num_of_neighbors + j];
+		for (int j = 0; j < max_in_degree; j++){
+			inv_transition t = d_inverse_neighbors[l*max_in_degree + j];
+			if (t.state == -1) break;
 			gen_prob = log_mult(d_viterbi_matrix[(i - 1)*num_of_states + t.state].prob, t.prob);
 			if (log_greater(gen_prob, m)){
 				m = gen_prob;
@@ -72,6 +73,7 @@ void calculate_viterbi_path(int seq_length,
 std::vector<int> gpu_viterbi_path(
 		std::vector<State> &states,
 		std::vector<std::vector<std::pair<int, LogNum> > > &inverse_neighbors,
+		int max_in_degree, 
 		std::vector<double> &event_sequence)
 {
 
@@ -79,7 +81,6 @@ std::vector<int> gpu_viterbi_path(
 	int num_of_states = inverse_neighbors.size();
 	int seq_length = event_sequence.size();
 	LogNum init_transition_prob = LogNum(1.0/(double)num_of_states);
-	int num_of_neighbors = inverse_neighbors[0].size();
 
 	//initialize first row of the viterbi matrix (host memory)
 	viterbi_entry *viterbi_matrix_row = (viterbi_entry *)malloc(num_of_states * sizeof(viterbi_entry));
@@ -99,13 +100,19 @@ std::vector<int> gpu_viterbi_path(
 		state_p[i] = s;
 	}
 	//convert transitions to struct type
-	inv_transition *inv_neighbors = (inv_transition *)malloc(num_of_states * num_of_neighbors *sizeof(inv_transition));
+	inv_transition *inv_neighbors = (inv_transition *)malloc(num_of_states * max_in_degree *sizeof(inv_transition));
 	for (int i = 0; i < num_of_states; i++){
 		for (int j = 0; j < inverse_neighbors[i].size(); j++){
 			inv_transition t;
 			t.state = inverse_neighbors[i][j].first;
 			t.prob = (inverse_neighbors[i][j].second).exponent;
-			inv_neighbors[i * num_of_neighbors + j] = t;
+			inv_neighbors[i * max_in_degree + j] = t;
+		}
+		for (int j = inverse_neighbors[i].size(); j < max_in_degree; j++){
+			inv_transition t;
+			t.state = -1;
+			t.prob = INFINITY;
+			inv_neighbors[i * max_in_degree + j] = t;
 		}
 	}
 
@@ -115,12 +122,12 @@ std::vector<int> gpu_viterbi_path(
 	int *d_state_seq;
 
 	cudaMalloc((void **)&d_viterbi_matrix, seq_length * num_of_states * sizeof(viterbi_entry));
-	cudaMalloc((void **)&d_inverse_neighbors, num_of_states * num_of_neighbors * sizeof(inv_transition));
+	cudaMalloc((void **)&d_inverse_neighbors, num_of_states * max_in_degree * sizeof(inv_transition));
 	cudaMalloc((void **)&d_states, num_of_states * sizeof(state_params));
 
 	cudaMemcpy(d_viterbi_matrix, viterbi_matrix_row, num_of_states * sizeof(viterbi_entry), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_states, state_p, num_of_states * sizeof(state_params), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_inverse_neighbors, inv_neighbors, num_of_states * num_of_neighbors *sizeof(inv_transition), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_inverse_neighbors, inv_neighbors, num_of_states * max_in_degree *sizeof(inv_transition), cudaMemcpyHostToDevice);
 
 	int threads_per_block = 512;
 	int num_of_blocks = std::max(num_of_states / threads_per_block, 1);
@@ -131,7 +138,7 @@ std::vector<int> gpu_viterbi_path(
 			d_inverse_neighbors,
 			d_states,
 			num_of_states,
-			num_of_neighbors,
+			max_in_degree,
 			i,
 			event_sequence[i]);
 		cudaDeviceSynchronize();

@@ -97,6 +97,10 @@ void HMM::set_skip_prob(double prob){
 	prob_skip = prob;
 }
 
+void HMM::set_max_skip(int skip){
+	max_skip = skip + 1;
+}
+
 int HMM::kmer_overlap(std::string from, std::string to){
 	int count = 0;
 	for (int prefix = 0; prefix < from.size(); prefix++){
@@ -159,6 +163,7 @@ void HMM::compute_transitions(){
 		LogNum skip_sum(0.0);
 		LogNum level_skip_prob = LogNum(prob_skip);
 		for (int i = 2; i < real_max_skip; i++){
+			//printf("There are %d neighbors for skip distance %d\n", skip_levels[i].size(), i);
 			for (int s = 0; s < skip_levels[i].size(); s++){
 				int state_to = skip_levels[i][s];
 				transitions[state_to][state_from] = level_skip_prob / LogNum(skip_levels[i].size());
@@ -174,11 +179,14 @@ void HMM::compute_transitions(){
 			inverse_neighbors[state_from].push_back({state_to, p_step / (double)bases.size()});
 		}
 	}
-	BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
-}
+	std::vector<int>in_degrees(num_of_states);
+	std::transform(inverse_neighbors.begin(), inverse_neighbors.end(), in_degrees.begin(), 
+					[](std::vector<std::pair<int, LogNum> >x){return x.size();});
+	max_in_degree = *std::max_element(in_degrees.begin(), in_degrees.end());
+	printf("Max indegree is %d", max_in_degree);
+	printf("Min indegree is %d", *std::min_element(in_degrees.begin(), in_degrees.end()));
 
-void HMM::gpu_viterbi(std::vector<double>& event_sequence){
-	std::vector<int> res = gpu_viterbi_path(states, inverse_neighbors, event_sequence);
+	BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 }
 
 void save_matrix(Matrix<LogNum>viterbi_matrix){
@@ -197,7 +205,7 @@ std::vector<int> HMM::compute_viterbi_path(std::vector<double>& event_sequence, 
 	if (method == "GPU"){
 		BOOST_LOG_TRIVIAL(info) << "Running viterbi on GPU" << "\n";
 		auto start = system_clock::now();
-		std::vector<int> res = gpu_viterbi_path(states, inverse_neighbors, event_sequence);
+		std::vector<int> res = gpu_viterbi_path(states, inverse_neighbors, max_in_degree, event_sequence);
 		BOOST_LOG_TRIVIAL(info) << "Viterbi path complete in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 		return res;
 	}
@@ -401,7 +409,7 @@ std::vector<std::vector<int> > HMM::cpu_samples(int num_of_samples, std::vector<
 std::vector<std::vector<int> > HMM::generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method){
 	if (method == "GPU"){
 		auto start = system_clock::now();
-		std::vector<std::vector<int> > r = gpu_samples(num_of_samples, states, inverse_neighbors, event_sequence);
+		std::vector<std::vector<int> > r = gpu_samples(num_of_samples, states, inverse_neighbors, max_in_degree, event_sequence);
 		BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<" samples of length "<< event_sequence.size() <<" on GPU took " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 		return r;
 	}

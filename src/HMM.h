@@ -18,6 +18,8 @@ class HMM{
 private:
 	int kmer_size;
 	int num_of_states = 0;
+	int max_in_degree = 0;
+
 	int max_skip = 2;
 
 	std::set<std::string>bases;
@@ -59,8 +61,7 @@ public:
 	
 	void set_stay_prob(double prob);
 	void set_skip_prob(double prob);
-
-	void gpu_viterbi(std::vector<double>& event_sequence);
+	void set_max_skip(int skip);
 
 	void dump_emissions(std::vector<double>&event_sequence);
 };

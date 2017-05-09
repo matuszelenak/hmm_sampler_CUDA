@@ -56,7 +56,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
     return event_data;
 }
 
-std::vector<double>loadEventData(std::string filename){
+std::vector<double>load_raw_event_data(std::string filename, long long limit){
 	BOOST_LOG_TRIVIAL(info) << "Loading event data from " << filename;
 	std::ifstream event_file;
 	event_file.open(filename);
@@ -66,7 +66,10 @@ std::vector<double>loadEventData(std::string filename){
 		std::size_t offset = 0;
 		res.push_back(std::stod(&line[0], &offset));
 	}
-	BOOST_LOG_TRIVIAL(info) << "Loading done";
+    if (limit != -1){
+    	res.resize(limit);
+    }
+    BOOST_LOG_TRIVIAL(info) << "Loading done";
 	return res;
 }
 
@@ -101,6 +104,8 @@ int main(int argc, char const *argv[])
 		("stay", po::value<double>(), "Set custom stay probability for model")
 		("head,h",po::value<long long>(), "Set a limit on number of events processed")
 		("method",po::value<std::string>(), "Method for calculation CPU|GPU")
+		("raw-input", "Treat input files as raw text files only containing the event means")
+		("maxskip", po::value<int>(), "Set maximum number of bases the HMM can skip in a transition")
 	;
 	po::positional_options_description p;
 	p.add("input-file", -1);
@@ -129,6 +134,8 @@ int main(int argc, char const *argv[])
 
 	if (vm.count("stay")) hmm.set_stay_prob(vm["stay"].as<double>());
 
+	if (vm.count("maxskip")) hmm.set_stay_prob(vm["maxskip"].as<int>());
+
 	hmm.compute_transitions();
 
 	long long limit = -1;
@@ -140,10 +147,18 @@ int main(int argc, char const *argv[])
 	std::vector<std::string>input_file_names;
 	if (vm.count("input-file")){
 		input_file_names = vm["input-file"].as< std::vector<std::string> >();
-		for (int f = 0; f < input_file_names.size(); f++){
-			input_file_data.push_back(load_fast5(input_file_names[f], limit));
+		if (vm.count("raw-input")){
+			for (int f = 0; f < input_file_names.size(); f++){
+				input_file_data.push_back(load_raw_event_data(input_file_names[f], limit));
+			}
+		}
+		else{
+			for (int f = 0; f < input_file_names.size(); f++){
+				input_file_data.push_back(load_fast5(input_file_names[f], limit));
+			}
 		}
 	}
+
 	std::string method;
 	if (vm.count("method")){
 		method = vm["method"].as< std::string >();
@@ -156,10 +171,11 @@ int main(int argc, char const *argv[])
 				hmm.adjust_scaling(input_file_data[f]);
 			}
 			std::vector<int>v_path = hmm.compute_viterbi_path(input_file_data[f], method);
+			/*
 			for (int i = 0; i < v_path.size(); i++){
 				printf("%d ", v_path[i]);
 			}
-			printf("\n");
+			printf("\n");*/
 			viterbi_results.push_back(hmm.translate_to_bases(v_path));
 		}
 
