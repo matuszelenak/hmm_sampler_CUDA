@@ -20,20 +20,6 @@ using std::chrono::system_clock;
 using std::chrono::duration_cast;
 using std::chrono::milliseconds;
 
-std::vector<std::string>HMM::generate_suffixes(){
-	std::vector<std::string>res;
-	for (std::set<char>::iterator it = bases.begin(); it != bases.end(); ++it){
-		std::string acc;
-		acc.push_back(*it);
-		for (std::set<char>::iterator it2 = bases.begin(); it2 != bases.end(); ++it2){
-			acc.push_back(*it2);
-			res.push_back(acc);
-			acc.pop_back();
-		}
-	}
-	return res;
-}
-
 std::vector<std::string>HMM::split_string(std::string &s, char delimiter){
 	std::vector<std::string> res;
 	std::string acc = "";
@@ -68,7 +54,7 @@ void HMM::load_model_params(std::string filename){
 		kmer_to_state.insert(std::pair<std::string, int>(kmer_label, states.size()));
 		states.push_back(state);
 		for (int i = 0; i < kmer_label.size(); i++){
-			bases.insert(kmer_label[i]);
+			bases.insert(std::string(1,kmer_label[i]));
 		}
 	}
 	kmer_size = kmer_label.size();
@@ -124,46 +110,71 @@ int HMM::kmer_overlap(std::string from, std::string to){
 	return count;
 }
 
+std::vector<std::vector<std::string> > HMM::generate_subkmers(){
+	std::vector<std::vector<std::string> >res(max_skip + 1);
+	std::vector<std::string>base_v;
+	std::copy(bases.begin(), bases.end(), std::back_inserter(base_v));
+	res[0] = {""};
+	for (int len = 1; len <= max_skip; len++){
+		for (int j = 0; j < res[len-1].size(); j++){
+			for (int k = 0; k < base_v.size(); k++){
+				res[len].push_back(res[len - 1][j] + base_v[k]);
+			}
+		}
+	}
+	return res;
+}
+
 void HMM::compute_transitions(){
 	BOOST_LOG_TRIVIAL(info) << "Computing state transition probabilites...";
 	auto start = system_clock::now();
 
+	std::vector<std::vector<std::string> >subkmers = generate_subkmers();
 	transitions.resize(states.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
 	inverse_neighbors.resize(states.size());
-
-	for (int state_from = 0; state_from < states.size(); state_from++){
-		std::vector<int>normal_states;
-		std::vector<int>skip_states;
-		for (int state_to = 0; state_to < states.size(); state_to ++){
-			std::string kmer_from = states[state_from].kmer_label;
-			std::string kmer_to = states[state_to].kmer_label;
-			int overlap = kmer_overlap(kmer_from, kmer_to);
-			switch(overlap){
-				case 0 : {
-					transitions[state_from][state_to] = LogNum(prob_stay);
-					inverse_neighbors[state_to].push_back({state_from, LogNum(prob_stay)});
-					break;
+	std::vector<std::vector<bool> >existing_trans(num_of_states, std::vector<bool>(num_of_states, false));
+	for (int state_from = 0; state_from < num_of_states; state_from++){
+		std::vector<std::vector<int> >skip_levels;
+		std::string kmer_from = states[state_from].kmer_label;
+		for (int skip = 0; skip <= std::min(kmer_size, max_skip); skip++){
+			skip_levels.push_back(std::vector<int>());
+			std::string kmer_from_suffix = kmer_from.substr(skip, kmer_size - skip);
+			for (int i = 0; i < subkmers[skip].size(); i++){
+				int state_to = kmer_to_state[kmer_from_suffix + subkmers[skip][i]];
+				if (existing_trans[state_from][state_to]){
+					continue;
 				}
-				case 1 : {
-					normal_states.push_back(state_to);
-					break;
-				}
-				case 2 : {
-					skip_states.push_back(state_to);
-					break;
-				}
+				existing_trans[state_from][state_to] = true;
+				skip_levels[skip].push_back(state_to);
 			}
 		}
-		for (int i = 0; i < normal_states.size(); i++){
-			transitions[state_from][normal_states[i]] = LogNum((1 - prob_skip - prob_stay) / normal_states.size());
-			inverse_neighbors[normal_states[i]].push_back({state_from, LogNum((1 - prob_skip - prob_stay) / normal_states.size())});
+		int real_max_skip = 0;
+		for (int i = 0; i < skip_levels.size(); i++){
+			if (!skip_levels[i].empty()) real_max_skip++;
 		}
-		for (int i = 0; i < skip_states.size(); i++){
-			transitions[state_from][skip_states[i]] = LogNum(prob_skip / skip_states.size());
-			inverse_neighbors[skip_states[i]].push_back({state_from, LogNum(prob_skip / skip_states.size())});
+
+		transitions[state_from][state_from] = LogNum(prob_stay);
+		inverse_neighbors[state_from].push_back({state_from, LogNum(prob_stay)});
+
+		LogNum skip_sum(0.0);
+		LogNum level_skip_prob = LogNum(prob_skip);
+		for (int i = 2; i < real_max_skip; i++){
+			for (int s = 0; s < skip_levels[i].size(); s++){
+				int state_to = skip_levels[i][s];
+				transitions[state_to][state_from] = level_skip_prob / LogNum(skip_levels[i].size());
+				inverse_neighbors[state_from].push_back({state_to, level_skip_prob / LogNum(skip_levels[i].size())});
+			}
+			skip_sum += level_skip_prob;
+			level_skip_prob *= level_skip_prob;
+		}
+		LogNum p_step(1 - prob_stay - skip_sum.value());
+		for (int s = 0; s < skip_levels[1].size(); s++){
+			int state_to = skip_levels[1][s];
+			transitions[state_to][state_from] = p_step / (double)bases.size();
+			inverse_neighbors[state_from].push_back({state_to, p_step / (double)bases.size()});
 		}
 	}
-	//BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
+	BOOST_LOG_TRIVIAL(info) << "Transition computation done in "<< duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
 }
 
 void HMM::gpu_viterbi(std::vector<double>& event_sequence){

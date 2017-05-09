@@ -18,7 +18,9 @@ class HMM{
 private:
 	int kmer_size;
 	int num_of_states = 0;
-	std::set<char>bases;
+	int max_skip = 2;
+
+	std::set<std::string>bases;
 	std::vector<State>states;
 	Matrix<LogNum>transitions;
 	Matrix<std::pair<int, LogNum> >inverse_neighbors;
@@ -32,9 +34,9 @@ private:
 	double prob_stay = 0.1;
 
 	std::vector<std::string> split_string(std::string &s, char delimiter);
-	std::vector<std::string> generate_suffixes();
 	int kmer_overlap(std::string from, std::string to);
 	std::vector<std::vector<int> > cpu_samples(int num_of_samples, std::vector<double> &event_sequence, int seed);
+	std::vector<std::vector<std::string> > generate_subkmers();
 
 public:
 	void load_model_params(std::string filename);
