@@ -42,4 +42,7 @@ __device__ bool log_greater(double a, double b);
 __host__
 __device__ double log_sum(double a, double b);
 
+__host__
+__device__ bool log_eq(double a, double b);
+
 #endif

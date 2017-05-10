@@ -53,3 +53,8 @@ __device__ double log_sum(double a, double b){
 		}
 	}
 }
+
+__host__
+__device__ bool log_eq(double a, double b){
+	return fabs(exp(a) - exp(b)) < 1.0e-15;
+}
