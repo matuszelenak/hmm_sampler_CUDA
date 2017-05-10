@@ -25,6 +25,9 @@ struct viterbi_entry{
 };
 
 __host__
+__device__ bool log_less(double a, double b);
+
+__host__
 __device__ double emission_probability(double mean, double stdv, double emission);
 
 __host__

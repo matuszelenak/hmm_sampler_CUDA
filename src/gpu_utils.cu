@@ -4,6 +4,13 @@
 #include <cmath>
 
 __host__
+__device__ bool log_less(double a, double b){
+	if (a == -INFINITY && b != -INFINITY) return true;
+	if (a == -INFINITY) return false;
+	return a < b;
+}
+
+__host__
 __device__ double emission_probability(double mean, double stdv, double emission){
 	double frac = (emission - mean) / stdv;
 	return (1 / (stdv * sqrt(2 * M_PI))) * exp(-0.5 * frac * frac);
@@ -34,17 +41,15 @@ __device__ bool log_greater(double a, double b){
 
 __host__
 __device__ double log_sum(double a, double b){
-	double res = a;
 	if (a == -INFINITY){
-		res = b;
+		return b;
 	}
 	else{
 		if (a > b){
-			res += log1p(exp(b - a));
+			return a + log(1 + exp(b - a));
 		}
 		else{
-			res += log1p(exp(a - b));
+			return b + log(1 + exp(a - b));
 		}
 	}
-	return res;
 }

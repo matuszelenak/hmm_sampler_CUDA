@@ -30,39 +30,39 @@ __global__ void calculate_fw_probs(
 				+ l * max_in_degree + j] = log_mult(gen_prob, em_prob);
 		}
 		d_fw_matrix[i * num_of_states + l] = sum;
+		/*
 		if (sum != -INFINITY){
 			for (int j = 0; j < actual_neighbors; j++){
 				int sh = i * num_of_states * max_in_degree + l * max_in_degree + j;
 				d_prob_matrix[sh] = log_div(d_prob_matrix[sh], sum);
-				d_prob_matrix[sh] = exp(d_prob_matrix[sh]);
 			}
 			for (int j = actual_neighbors; j < max_in_degree; j++){
 				int sh = i * num_of_states * max_in_degree + l * max_in_degree + j;
 				d_prob_matrix[sh] = INFINITY;
 			}
-		}
+		}*/
 	}
 }
 
 __global__ void normalize(double *d_array, int len){
 	int l = threadIdx.x + blockIdx.x * blockDim.x;
-	double sum = 0.0;
+	double sum = -INFINITY;
 	for (int i = 0; i < len; i++){
 		if (d_array[l * len + i] == INFINITY) break;
-		sum += d_array[l * len + i];
+		sum = log_sum(d_array[l * len + i], sum);
 	} 
 	for (int i = 0; i < len; i++){
 		if (d_array[l * len + i] == INFINITY) break;
-		d_array[l * len + i] /= sum;
+		d_array[l * len + i] = log_div(d_array[l * len + i], sum);
 	}
 }
 
 __global__ void prefix_sum(double *d_prob_weights, int max_in_degree){
 	int l = threadIdx.x + blockIdx.x * blockDim.x;
-	double sum = 0;
+	double sum = -INFINITY;
 	for (int i = 0; i < max_in_degree; i++){
 		if (d_prob_weights[l * max_in_degree + i] == INFINITY) break;
-		sum += d_prob_weights[l * max_in_degree + i];
+		sum = log_sum(d_prob_weights[l * max_in_degree + i], sum);
 		d_prob_weights[l * max_in_degree + i] = sum;
 	}
 }
@@ -73,7 +73,7 @@ void print_prob_matrix(double *prob_matrix, int seq_length, int num_of_states, i
 			printf("[");
 			for (int ne = 0; ne < max_in_degree; ne++){
 				if (prob_matrix[i*num_of_states*max_in_degree + st*max_in_degree + ne] == INFINITY) break;
-				printf("%.3f,", prob_matrix[i*num_of_states*max_in_degree + st*max_in_degree + ne]);
+				printf("%.3f,", exp(prob_matrix[i*num_of_states*max_in_degree + st*max_in_degree + ne]));
 			}
 			printf("],");
 		}
@@ -162,7 +162,6 @@ void gpu_forward_matrix(
 	}
 	for (int i = 0; i < num_of_states; i++){
 		last_row[i] = log_div(last_row[i], sum);
-		last_row[i] = exp(last_row[i]);
 	}
 	cudaMemcpy(d_last_row_weights, last_row, num_of_states * sizeof(double), cudaMemcpyHostToDevice);
 	
@@ -177,11 +176,12 @@ void gpu_forward_matrix(
 	}*/
 	
 	//normalize the prob weights again
+	
 	threads_per_block = 1024;
 	num_of_blocks = std::max(num_of_states * seq_length / threads_per_block, 1);
 	normalize<<<num_of_blocks, threads_per_block>>>(d_prob_matrix, max_in_degree);
 	cudaDeviceSynchronize();
-
+	
 	/*
 	cudaMemcpy(prob_matrix, d_prob_matrix, num_of_states * seq_length * max_in_degree * sizeof(double), cudaMemcpyDeviceToHost);
 	printf("Prob weights matrix looks like this after being normalized for the second time\n");
@@ -197,10 +197,10 @@ void gpu_forward_matrix(
 }
 
 __device__ int discrete_dist(double *weights, int max_in_degree, curandState *s){
-	double val = curand_uniform(s);
+	double val = log(curand_uniform(s));
 	for (int i = 0; i < max_in_degree; i++){
 		if (weights[i] == INFINITY) return (i - 1);
-		if (val <= weights[i]){
+		if (log_less(val,weights[i])){
 			return i;
 		}
 	}
@@ -236,16 +236,33 @@ __global__ void backtrack_sample(
 			rem_length--;
 		}
 	}
-
 }
 
+double sumdammit(double a, double b){
+	if (a > b){
+		return a + log1p(exp(b - a));
+	}
+	else
+	{
+		return b + log1p(exp(a - b));
+	}
+}
 
 std::vector<std::vector<int> > gpu_samples(
 	int num_of_samples,
 	std::vector<State> &states,
 	std::vector<std::vector<std::pair<int, LogNum> > > &inverse_neighbors,
 	int max_in_degree,
-	std::vector<double>&event_sequence){
+	std::vector<double>&event_sequence)
+{
+	/*
+	double test[16] = {-532.268,-368.933,-338.320,-397.375,-322.049,-311.708,-134.850,-340.415,-359.843,-624.111,-733.296,-353.861,-166.022,-140.817,-237.215,-518.579};
+	double sum = -INFINITY;
+	for (int i = 0; i < 16; i++){
+		sum = sumdammit(test[i], sum);
+		printf("%.3f ", sum);
+	}*/
+
 	cudaEvent_t start_sampling, stop_sampling;
 	cudaEventCreate(&start_sampling);
 	cudaEventCreate(&stop_sampling);
@@ -295,10 +312,11 @@ std::vector<std::vector<int> > gpu_samples(
 	int num_of_blocks = std::max(num_of_states * seq_length / threads_per_block, 1);
 	prefix_sum<<<num_of_blocks, threads_per_block>>>(d_prob_matrix, max_in_degree);
 	cudaDeviceSynchronize();
-	
-	//cudaMemcpy(prob_matrix, d_prob_matrix, seq_length * num_of_states * max_in_degree * sizeof(double), cudaMemcpyDeviceToHost);
-	//printf("After prefix sum calculation looks like this:\n");
-	//print_prob_matrix(prob_matrix, seq_length, num_of_states, max_in_degree);
+	/*
+	double *prob_matrix = (double *)malloc(seq_length * num_of_states * max_in_degree *sizeof(double));
+	cudaMemcpy(prob_matrix, d_prob_matrix, seq_length * num_of_states * max_in_degree * sizeof(double), cudaMemcpyDeviceToHost);
+	printf("After prefix sum calculation looks like this:\n");
+	print_prob_matrix(prob_matrix, seq_length, num_of_states, max_in_degree);*/
 
 	normalize<<<1,1>>>(d_last_row_weights, num_of_states);
 	cudaDeviceSynchronize();
