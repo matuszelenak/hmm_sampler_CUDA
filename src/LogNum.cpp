@@ -1,5 +1,7 @@
 #include "LogNum.h"
 
+double epsilon = 1.0e-15;
+
 LogNum::LogNum(){
 	exponent = -HUGE_VAL;
 }
@@ -30,10 +32,10 @@ LogNum& LogNum::operator+=(const LogNum& a){
 	}
 	else{
 		if (this -> exponent > a.exponent){
-			this -> exponent += log1p(exp(a.exponent - this -> exponent));
+			this -> exponent = this -> exponent + log(1 + exp(a.exponent - this -> exponent));
 		}
 		else{
-			this -> exponent += log1p(exp(this -> exponent - a.exponent));
+			this -> exponent = a.exponent + log(1 + exp(this -> exponent - a.exponent));
 		}
 	}
 	return *this;

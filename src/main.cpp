@@ -16,7 +16,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
 	std::vector<double>event_data;
 	if (not fast5::File::is_valid_file(file_name))
     {
-        BOOST_LOG_TRIVIAL(info) << "not a fast5 file [" << file_name << "]";
+        //BOOST_LOG_TRIVIAL(info) << "not a fast5 file [" << file_name << "]";
         return event_data;
     }
     {
@@ -46,7 +46,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
         }
         catch (hdf5_tools::Exception& e)
         {
-            BOOST_LOG_TRIVIAL(info) << "hdf5 error: " << e.what();
+            //BOOST_LOG_TRIVIAL(info) << "hdf5 error: " << e.what();
         }
     }
     assert(fast5::File::get_object_count() == 0);
@@ -57,7 +57,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
 }
 
 std::vector<double>load_raw_event_data(std::string filename, long long limit){
-	BOOST_LOG_TRIVIAL(info) << "Loading event data from " << filename;
+	//BOOST_LOG_TRIVIAL(info) << "Loading event data from " << filename;
 	std::ifstream event_file;
 	event_file.open(filename);
 	std::string line;
@@ -69,7 +69,7 @@ std::vector<double>load_raw_event_data(std::string filename, long long limit){
     if (limit != -1){
     	res.resize(limit);
     }
-    BOOST_LOG_TRIVIAL(info) << "Loading done";
+    //BOOST_LOG_TRIVIAL(info) << "Loading done";
 	return res;
 }
 
@@ -85,7 +85,7 @@ void save_to_fasta(std::string filename, std::vector<std::string> seq_names, std
 		seq_file << "\n";
 	}
 	seq_file.close();
-	BOOST_LOG_TRIVIAL(info) << "Saved file " << filename + ".fasta";
+	//BOOST_LOG_TRIVIAL(info) << "Saved file " << filename + ".fasta";
 }
 
 int main(int argc, char const *argv[])
@@ -123,7 +123,7 @@ int main(int argc, char const *argv[])
 	if (vm.count("model")) {
 		model_name = vm["model"].as<std::string>();
 	} else {
-	    BOOST_LOG_TRIVIAL(info) << "Model was not set. Defaulting to r73.c.p1.006.ont.model\n";
+	    //BOOST_LOG_TRIVIAL(info) << "Model was not set. Defaulting to r73.c.p1.006.ont.model\n";
 	    model_name = "r73.c.p1.006.ont.model";
 	}
 
@@ -134,7 +134,7 @@ int main(int argc, char const *argv[])
 
 	if (vm.count("stay")) hmm.set_stay_prob(vm["stay"].as<double>());
 
-	if (vm.count("maxskip")) hmm.set_stay_prob(vm["maxskip"].as<int>());
+	if (vm.count("maxskip")) hmm.set_max_skip(vm["maxskip"].as<int>());
 
 	hmm.compute_transitions();
 
@@ -171,11 +171,6 @@ int main(int argc, char const *argv[])
 				hmm.adjust_scaling(input_file_data[f]);
 			}
 			std::vector<int>v_path = hmm.compute_viterbi_path(input_file_data[f], method);
-			/*
-			for (int i = 0; i < v_path.size(); i++){
-				printf("%d ", v_path[i]);
-			}
-			printf("\n");*/
 			viterbi_results.push_back(hmm.translate_to_bases(v_path));
 		}
 

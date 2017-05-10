@@ -24,7 +24,6 @@ private:
 
 	std::set<std::string>bases;
 	std::vector<State>states;
-	Matrix<LogNum>transitions;
 	Matrix<std::pair<int, LogNum> >inverse_neighbors;
 	LogNum init_transition_prob = LogNum(0.0);
 
@@ -43,17 +42,15 @@ private:
 public:
 	void load_model_params(std::string filename);
 	void compute_transitions();
-	Matrix<std::vector<double> > compute_forward_matrix(std::vector<double>& event_sequence);
+	std::pair<Matrix<std::vector<LogNum> >, Matrix<LogNum> > compute_forward_matrix(std::vector<double>& event_sequence);
 
 	std::vector<int> compute_viterbi_path(std::vector<double>&event_sequence, std::string method);
 
 	std::vector<int> cpu_viterbi_path(std::vector<double>&event_sequence);
 
-	std::vector<int> backtrack_sample(int last_state, int l, Matrix<std::vector<double> > &prob_weights, std::default_random_engine gen);
+	std::vector<int> backtrack_sample(std::vector<LogNum>&last_row_weights, Matrix<std::vector<LogNum> > &prob_weights, int seq_length);
 
 	std::vector<std::vector<int> > generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method);
-
-	std::vector<char> translate_to_bases(int *state_sequence, int seq_length) const;
 
 	std::vector<char> translate_to_bases(std::vector<int> state_sequence) const;
 
@@ -62,8 +59,6 @@ public:
 	void set_stay_prob(double prob);
 	void set_skip_prob(double prob);
 	void set_max_skip(int skip);
-
-	void dump_emissions(std::vector<double>&event_sequence);
 };
 
 #endif
