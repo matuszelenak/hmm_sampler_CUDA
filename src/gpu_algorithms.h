@@ -21,4 +21,11 @@ std::vector<std::vector<int> > gpu_samples(
 	int max_in_degree,
 	std::vector<double>&event_sequence);
 
+std::vector<std::vector<int> > gpu_samples_v2(
+	int num_of_samples,
+	std::vector<State> &states,
+	std::vector<std::vector<std::pair<int, LogNum> > > &inverse_neighbors,
+	int max_in_degree,
+	std::vector<double>&event_sequence);
+
 #endif

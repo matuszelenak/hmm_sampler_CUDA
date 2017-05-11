@@ -309,6 +309,36 @@ std::pair<Matrix<std::vector<LogNum> >, Matrix<LogNum> > HMM::compute_forward_ma
 	return std::make_pair(probability_weights, fwd_matrix);
 }
 
+Matrix<LogNum> HMM::compute_forward_matrix_2(std::vector<double>& event_sequence){
+	//BOOST_LOG_TRIVIAL(info) << "Computing forward matrix";
+	auto start = system_clock::now();
+
+	Matrix<LogNum>fwd_matrix(event_sequence.size(), std::vector<LogNum>(states.size(), LogNum(0.0)));
+
+	for (int i = 0; i < states.size(); i++){
+		fwd_matrix[0][i] = init_transition_prob * states[i].get_emission_probability(event_sequence[0]);
+	}
+	for (int i = 1; i < event_sequence.size(); i++){
+		for (int l = 0; l < states.size(); l++){
+			LogNum sum(0.0);
+			LogNum em_prob = states[l].get_emission_probability(event_sequence[i]);
+			std::vector<LogNum>probabilites;
+			for (int j = 0; j < inverse_neighbors[l].size(); j++){
+				std::pair<int, LogNum>p = inverse_neighbors[l][j];
+				int k = p.first;
+				LogNum gen_prob = fwd_matrix[i - 1][k] * p.second;
+				LogNum fw_prob = gen_prob * em_prob;
+				sum += fw_prob;
+			}
+			fwd_matrix[i][l] = sum;
+		}
+		//BOOST_LOG_TRIVIAL(info) << "Row " << i << " done out of " << event_sequence.size();
+	}
+	printf("FW MATRIX TOTAL TOOK %ld ms\n", duration_cast<milliseconds>(system_clock::now() - start).count());
+	//BOOST_LOG_TRIVIAL(info) << "Forward matrix calculation done in " << duration_cast<milliseconds>(system_clock::now() - start).count() << " ms";
+	return fwd_matrix;
+}
+
 std::vector<char> HMM::translate_to_bases(std::vector<int> state_sequence) const{
 	int prev_state = state_sequence[0];
 	std::vector<char> dna_seq;
@@ -360,6 +390,43 @@ std::vector<int> HMM::backtrack_sample(std::vector<LogNum>&last_row_weights, Mat
 	return sample;
 }
 
+std::vector<int> HMM::backtrack_sample_2(Matrix<LogNum>&fw_matrix, std::vector<double>&event_sequence){
+	int seq_length = event_sequence.size();
+	std::vector<int>sample(seq_length, 0);
+
+	std::random_device rd;
+	std::mt19937 e2(rd());
+	std::uniform_real_distribution<> dist(0, 1);
+	std::vector<LogNum>last_row_weights = fw_matrix.back();
+	normalize(last_row_weights);
+	prefix_sum(last_row_weights);
+
+	int curr_state = discrete_dist(last_row_weights, LogNum(dist(e2)));
+	sample[seq_length - 1] = curr_state;
+
+	int i = seq_length - 2;
+	int rem_length = seq_length - 1;
+	
+	while (rem_length > 0){
+		std::vector<LogNum>state_weights;
+		LogNum em_prob = states[curr_state].get_emission_probability(event_sequence[rem_length - 1]);
+		for (int j = 0; j < inverse_neighbors[curr_state].size(); j++){
+			auto t = inverse_neighbors[curr_state][j];
+			LogNum temp = fw_matrix[rem_length - 1][t.first] * t.second;
+			state_weights.push_back(temp * em_prob);
+		}
+
+		normalize(state_weights);
+		prefix_sum(state_weights);
+		int next_state_id = discrete_dist(state_weights, LogNum(dist(e2)));
+		curr_state = inverse_neighbors[curr_state][next_state_id].first;
+		sample[i] = curr_state;
+		rem_length--;
+		i--;
+	}
+	return sample;
+}
+
 std::vector<std::vector<int> > HMM::cpu_samples(int num_of_samples, std::vector<double>&event_sequence, int seed){
 	//BOOST_LOG_TRIVIAL(info) << "Generating "<< num_of_samples <<"samples";
 	
@@ -380,14 +447,28 @@ std::vector<std::vector<int> > HMM::cpu_samples(int num_of_samples, std::vector<
 	return res;
 }
 
-std::vector<std::vector<int> > HMM::generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method){
+std::vector<std::vector<int> > HMM::cpu_samples_v2(int num_of_samples, std::vector<double>&event_sequence, int seed){
+	Matrix<int>res;
+	Matrix<LogNum>fwd_matrix = compute_forward_matrix_2(event_sequence);
+	
+	auto start = system_clock::now();
+	for (int i = 0; i < num_of_samples; i++){
+		res.push_back(backtrack_sample_2(fwd_matrix, event_sequence));
+	}
+	printf("SAMPLING CPU TOOK %ld ms\n", duration_cast<milliseconds>(system_clock::now() - start).count());
+	return res;
+}
+
+std::vector<std::vector<int> > HMM::generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method, int version){
 	std::vector<std::vector<int> > r;
 	auto start = system_clock::now();
 	if (method == "GPU"){
-		r = gpu_samples(num_of_samples, states, inverse_neighbors, max_in_degree, event_sequence);
+		if (version == 1) r = gpu_samples(num_of_samples, states, inverse_neighbors, max_in_degree, event_sequence);
+		else r = gpu_samples_v2(num_of_samples, states, inverse_neighbors, max_in_degree, event_sequence);
 	}
 	else{
-		r = cpu_samples(num_of_samples, event_sequence, rand());
+		if (version == 1) r = cpu_samples(num_of_samples, event_sequence, rand());
+		else r = cpu_samples_v2(num_of_samples, event_sequence, rand());
 	}
 	printf("SAMPLING TOTAL TOOK %ld ms\n", duration_cast<milliseconds>(system_clock::now() - start).count());
 	return r;

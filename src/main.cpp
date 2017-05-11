@@ -106,6 +106,7 @@ int main(int argc, char const *argv[])
 		("method",po::value<std::string>(), "Method for calculation CPU|GPU")
 		("raw-input", "Treat input files as raw text files only containing the event means")
 		("maxskip", po::value<int>(), "Set maximum number of bases the HMM can skip in a transition")
+		("version", po::value<int>(), "Set sampling algorithm version. Version 1 consumes more ram, version 2 is slower for big number of samples")
 	;
 	po::positional_options_description p;
 	p.add("input-file", -1);
@@ -183,18 +184,23 @@ int main(int argc, char const *argv[])
 		}
 	}
 
+	int version = 1;
+	if (vm.count("version")){
+		version = vm["version"].as<int>();
+	}
+
 	if (vm.count("sample")){
 		int num_of_samples = vm["sample"].as<int>();
 		for (int f = 0; f < input_file_data.size(); f++){
 			if (vm.count("scale")){
 				hmm.adjust_scaling(input_file_data[f]);
 			}
-			Matrix<int> samples = hmm.generate_samples(num_of_samples, input_file_data[f], method);
-			Matrix<char>translated_samples(samples.size());
-			std::transform(samples.begin(), samples.end(), translated_samples.begin(),
-							[hmm](std::vector<int>x){return hmm.translate_to_bases(x);});
+			Matrix<int> samples = hmm.generate_samples(num_of_samples, input_file_data[f], method, version);
 
 			if (vm.count("fasta")){
+				Matrix<char>translated_samples(samples.size());
+				std::transform(samples.begin(), samples.end(), translated_samples.begin(),
+							[hmm](std::vector<int>x){return hmm.translate_to_bases(x);});
 				std::vector<std::string>seq_names;
 				for (int i = 0; i < samples.size(); i++){
 					seq_names.push_back(input_file_names[f] + "_sample_" + std::to_string(i));
