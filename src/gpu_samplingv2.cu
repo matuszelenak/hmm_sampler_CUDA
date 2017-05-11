@@ -63,6 +63,36 @@ __device__ void prefix_sum(double *d_prob_weights, int max_in_degree){
 	}
 }
 
+__device__ int discrete_dist_bin(double *weights, int len, curandState *s){
+	double val = log(curand_uniform(s));
+	int pivot_l, pivot_r;
+	double val_l, val_r;
+	int left = 0;
+	int right = len + 1;
+	pivot_r = (left + right) / 2;
+	pivot_l = pivot_r - 1;
+	while(left != right) {
+		if (pivot_r == len) val_r = 0; else val_r = weights[pivot_r];
+		if (pivot_l == -1) val_l = -INFINITY; else val_l = weights[pivot_l];
+		if (log_less(val, val_l)){
+			right = pivot_r;
+			pivot_r = (left + right) / 2;
+			pivot_l = pivot_r - 1;
+		} else
+		if (log_less(val_r, val)){
+			left = pivot_r;
+			pivot_r = (left + right) / 2;
+			pivot_l = pivot_r - 1;
+		}
+		else{
+			if (pivot_r == len) return pivot_r - 1;
+			return pivot_r;
+		}
+	}
+	if (pivot_r == len) return pivot_r - 1;
+	return pivot_r;
+}
+
 __device__ int discrete_dist_2(double *weights, int max_in_degree, curandState *s){
 	double val = log(curand_uniform(s));
 	for (int i = 0; i < max_in_degree; i++){
@@ -98,7 +128,7 @@ __global__ void backtrack_sample(
 		curandState s;
 		curand_init(seed, sample_id, 0, &s);
 
-		int curr_state = discrete_dist_2(d_last_row_weights, num_of_states, &s);
+		int curr_state = discrete_dist_bin(d_last_row_weights, num_of_states, &s);
 		sample[sample_id * seq_length + seq_length - 1] = curr_state;
 		int i = seq_length - 2;
 		int rem_length = seq_length - 1;
@@ -120,7 +150,7 @@ __global__ void backtrack_sample(
 			normalize(d_state_weights, actual_neighbors);
 			prefix_sum(d_state_weights, actual_neighbors);
 
-			int next_state_id = discrete_dist_2(d_state_weights, actual_neighbors, &s);
+			int next_state_id = discrete_dist_bin(d_state_weights, actual_neighbors, &s);
 			curr_state = d_inv_neighbors[curr_state * max_in_degree + next_state_id].state;
 			sample[sample_id * seq_length + i] = curr_state;
 			rem_length--;
@@ -192,6 +222,11 @@ std::vector<std::vector<int> > gpu_samples_v2(
 	int threads_per_block = 1024;
 	int num_of_blocks = std::max((int)ceil((double)(num_of_states) / (double)threads_per_block), 1);
 
+
+	cudaEvent_t start_fwm, stop_fwm;
+	cudaEventCreate(&start_fwm);
+	cudaEventCreate(&stop_fwm);
+	cudaEventRecord(start_fwm);
 	for (int i = 1; i < seq_length; i++){
 		calculate_fw_probs<<<num_of_blocks, threads_per_block>>>(
 				d_fw_matrix,
@@ -204,9 +239,21 @@ std::vector<std::vector<int> > gpu_samples_v2(
 			);
 		cudaDeviceSynchronize();
 	}
+	cudaEventRecord(stop_fwm);
+	cudaEventSynchronize(stop_fwm);
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start_fwm, stop_fwm);
+	printf("FW MATRIX GPU TOOK %d ms\n", (int)round(milliseconds));
+	cudaEventDestroy(start_fwm);
+	cudaEventDestroy(stop_fwm);
 
 	int *d_samples;
 	cudaMalloc((void **)&d_samples, seq_length * num_of_samples * sizeof(int));
+
+	cudaEvent_t start_sampling, stop_sampling;
+	cudaEventCreate(&start_sampling);
+	cudaEventCreate(&stop_sampling);
+	cudaEventRecord(start_sampling);
 
 	threads_per_block = 1024;
 	num_of_blocks = std::max((int)ceil((double)(num_of_samples) / (double)threads_per_block), 1);
@@ -223,8 +270,15 @@ std::vector<std::vector<int> > gpu_samples_v2(
 				d_samples,
 				rand()
 		);
-
 	cudaDeviceSynchronize();
+	
+	cudaEventRecord(stop_sampling);
+	cudaEventSynchronize(stop_sampling);
+	milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
+	cudaEventDestroy(start_sampling);
+	cudaEventDestroy(stop_sampling);
+	printf("SAMPLING GPU TOOK %d ms\n",(int)round(milliseconds));
 
 	std::vector<std::vector<int> >r;
 
