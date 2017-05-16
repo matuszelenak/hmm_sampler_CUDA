@@ -126,8 +126,8 @@ int main(int argc, char const *argv[])
 	if (vm.count("model")) {
 		model_name = vm["model"].as<std::string>();
 	} else {
-	    BOOST_LOG_TRIVIAL(info) << "Model was not set. Defaulting to r73.c.p1.006.ont.model\n";
-	    model_name = "r73.c.p1.006.ont.model";
+	    BOOST_LOG_TRIVIAL(info) << "Model was not set. Defaulting to template_median68pA.model\n";
+	    model_name = "pore_models/template_median68pA.model";
 	}
 
 	HMM hmm;

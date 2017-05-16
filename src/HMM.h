@@ -58,13 +58,11 @@ public:
 
 	std::vector<std::vector<int> > generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method, int version);
 
-	Matrix<LogNum> compute_forward_matrix_2(std::vector<double>& event_sequence);
+	Matrix<LogNum> compute_forward_matrix_v2(std::vector<double>& event_sequence);
 
-	std::vector<int> backtrack_sample_2(Matrix<LogNum>&fw_matrix, std::vector<double>&event_sequence);
+	std::vector<int> backtrack_sample_v2(Matrix<LogNum>&fw_matrix, std::vector<double>&event_sequence);
 
 	std::vector<std::vector<int> > cpu_samples_v2(int num_of_samples, std::vector<double>&event_sequence, int seed);
-
-
 
 	std::vector<char> cpu_decode_path(std::vector<int> &state_sequence) const;
 
