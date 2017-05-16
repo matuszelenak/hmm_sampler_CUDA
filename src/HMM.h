@@ -25,6 +25,7 @@ private:
 	std::set<std::string>bases;
 	std::vector<State>states;
 	Matrix<std::pair<int, LogNum> >inverse_neighbors;
+	std::vector<std::string> kmers;
 	LogNum init_transition_prob = LogNum(0.0);
 
 	std::map<std::string, int> kmer_to_state;
@@ -42,6 +43,11 @@ private:
 public:
 	void load_model_params(std::string filename);
 	void compute_transitions();
+	void set_stay_prob(double prob);
+	void set_skip_prob(double prob);
+	void set_max_skip(int skip);
+	void adjust_scaling(std::vector<double>& event_sequence);
+
 	std::pair<Matrix<std::vector<LogNum> >, Matrix<LogNum> > compute_forward_matrix(std::vector<double>& event_sequence);
 
 	std::vector<int> compute_viterbi_path(std::vector<double>&event_sequence, std::string method);
@@ -52,19 +58,19 @@ public:
 
 	std::vector<std::vector<int> > generate_samples(int num_of_samples, std::vector<double>&event_sequence, std::string method, int version);
 
-	std::vector<char> translate_to_bases(std::vector<int> state_sequence) const;
-
-	void adjust_scaling(std::vector<double>& event_sequence);
-	
-	void set_stay_prob(double prob);
-	void set_skip_prob(double prob);
-	void set_max_skip(int skip);
-
 	Matrix<LogNum> compute_forward_matrix_2(std::vector<double>& event_sequence);
 
 	std::vector<int> backtrack_sample_2(Matrix<LogNum>&fw_matrix, std::vector<double>&event_sequence);
 
 	std::vector<std::vector<int> > cpu_samples_v2(int num_of_samples, std::vector<double>&event_sequence, int seed);
+
+
+
+	std::vector<char> cpu_decode_path(std::vector<int> &state_sequence) const;
+
+	std::vector<std::vector<char> > cpu_decode_paths(std::vector<std::vector<int> >&samples);
+
+	std::vector<std::vector<char> > decode_paths(std::vector<std::vector<int> >&samples, std::string method);
 };
 
 #endif

@@ -128,7 +128,7 @@ __global__ void backtrack_sample(
 		curandState s;
 		curand_init(seed, sample_id, 0, &s);
 
-		int curr_state = discrete_dist_bin(d_last_row_weights, num_of_states, &s);
+		int curr_state = discrete_dist_2(d_last_row_weights, num_of_states, &s);
 		sample[sample_id * seq_length + seq_length - 1] = curr_state;
 		int i = seq_length - 2;
 		int rem_length = seq_length - 1;
@@ -150,7 +150,7 @@ __global__ void backtrack_sample(
 			normalize(d_state_weights, actual_neighbors);
 			prefix_sum(d_state_weights, actual_neighbors);
 
-			int next_state_id = discrete_dist_bin(d_state_weights, actual_neighbors, &s);
+			int next_state_id = discrete_dist_2(d_state_weights, actual_neighbors, &s);
 			curr_state = d_inv_neighbors[curr_state * max_in_degree + next_state_id].state;
 			sample[sample_id * seq_length + i] = curr_state;
 			rem_length--;
@@ -222,11 +222,6 @@ std::vector<std::vector<int> > gpu_samples_v2(
 	int threads_per_block = 1024;
 	int num_of_blocks = std::max((int)ceil((double)(num_of_states) / (double)threads_per_block), 1);
 
-
-	cudaEvent_t start_fwm, stop_fwm;
-	cudaEventCreate(&start_fwm);
-	cudaEventCreate(&stop_fwm);
-	cudaEventRecord(start_fwm);
 	for (int i = 1; i < seq_length; i++){
 		calculate_fw_probs<<<num_of_blocks, threads_per_block>>>(
 				d_fw_matrix,
@@ -239,21 +234,9 @@ std::vector<std::vector<int> > gpu_samples_v2(
 			);
 		cudaDeviceSynchronize();
 	}
-	cudaEventRecord(stop_fwm);
-	cudaEventSynchronize(stop_fwm);
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start_fwm, stop_fwm);
-	printf("FW MATRIX GPU TOOK %d ms\n", (int)round(milliseconds));
-	cudaEventDestroy(start_fwm);
-	cudaEventDestroy(stop_fwm);
 
 	int *d_samples;
 	cudaMalloc((void **)&d_samples, seq_length * num_of_samples * sizeof(int));
-
-	cudaEvent_t start_sampling, stop_sampling;
-	cudaEventCreate(&start_sampling);
-	cudaEventCreate(&stop_sampling);
-	cudaEventRecord(start_sampling);
 
 	threads_per_block = 1024;
 	num_of_blocks = std::max((int)ceil((double)(num_of_samples) / (double)threads_per_block), 1);
@@ -271,34 +254,16 @@ std::vector<std::vector<int> > gpu_samples_v2(
 				rand()
 		);
 	cudaDeviceSynchronize();
-	
-	cudaEventRecord(stop_sampling);
-	cudaEventSynchronize(stop_sampling);
-	milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
-	printf("SAMPLING GPU TOOK %d ms\n",(int)round(milliseconds));
 
 	std::vector<std::vector<int> >r;
 
-	cudaEventCreate(&start_sampling);
-	cudaEventCreate(&stop_sampling);
-	cudaEventRecord(start_sampling);
 	int *samples = (int *)malloc(seq_length * num_of_samples * sizeof(int));
 	cudaMemcpy(samples, d_samples, seq_length * num_of_samples * sizeof(int), cudaMemcpyDeviceToHost);
-	cudaEventRecord(stop_sampling);
-	cudaEventSynchronize(stop_sampling);
-	milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
-	printf("SAMPLE ALLOC AND COPY TOOK %d ms\n",(int)round(milliseconds));
-	/*
+	
 	for (int i = 0; i < num_of_samples; i++){
 		std::vector<int>temp(samples + i * seq_length, samples + (i+1) * seq_length);
 		r.push_back(temp);
-	}*/
-
-	cudaEventCreate(&start_sampling);
-	cudaEventCreate(&stop_sampling);
-	cudaEventRecord(start_sampling);
+	}
 
 	cudaFree(d_fw_matrix);
 	cudaFree(d_sequence);
@@ -308,15 +273,6 @@ std::vector<std::vector<int> > gpu_samples_v2(
 	cudaFree(d_state_weights);
 	free(fw_matrix);
 	free(inv_neighbors);
-
-	cudaEventRecord(stop_sampling);
-	cudaEventSynchronize(stop_sampling);
-	milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
-	printf("SAMPLE FREEING MEM TOOK %d ms\n",(int)round(milliseconds));
-	cudaEventDestroy(start_sampling);
-	cudaEventDestroy(stop_sampling);
-	//free(samples);
 
 	return r;
 }

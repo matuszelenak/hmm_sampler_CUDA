@@ -16,7 +16,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
 	std::vector<double>event_data;
 	if (not fast5::File::is_valid_file(file_name))
     {
-        //BOOST_LOG_TRIVIAL(info) << "not a fast5 file [" << file_name << "]";
+        BOOST_LOG_TRIVIAL(info) << "not a fast5 file [" << file_name << "]";
         return event_data;
     }
     {
@@ -46,7 +46,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
         }
         catch (hdf5_tools::Exception& e)
         {
-            //BOOST_LOG_TRIVIAL(info) << "hdf5 error: " << e.what();
+            BOOST_LOG_TRIVIAL(info) << "hdf5 error: " << e.what();
         }
     }
     assert(fast5::File::get_object_count() == 0);
@@ -57,7 +57,7 @@ std::vector<double>load_fast5(std::string file_name, long long limit){
 }
 
 std::vector<double>load_raw_event_data(std::string filename, long long limit){
-	//BOOST_LOG_TRIVIAL(info) << "Loading event data from " << filename;
+	BOOST_LOG_TRIVIAL(info) << "Loading event data from " << filename;
 	std::ifstream event_file;
 	event_file.open(filename);
 	std::string line;
@@ -66,10 +66,10 @@ std::vector<double>load_raw_event_data(std::string filename, long long limit){
 		std::size_t offset = 0;
 		res.push_back(std::stod(&line[0], &offset));
 	}
-    if (limit != -1){
-    	res.resize(limit);
-    }
-    //BOOST_LOG_TRIVIAL(info) << "Loading done";
+	if (limit != -1){
+		res.resize(limit);
+	}
+	BOOST_LOG_TRIVIAL(info) << "Loading done";
 	return res;
 }
 
@@ -85,7 +85,7 @@ void save_to_fasta(std::string filename, std::vector<std::string> seq_names, std
 		seq_file << "\n";
 	}
 	seq_file.close();
-	//BOOST_LOG_TRIVIAL(info) << "Saved file " << filename + ".fasta";
+	BOOST_LOG_TRIVIAL(info) << "Saved file " << filename + ".fasta";
 }
 
 int main(int argc, char const *argv[])
@@ -113,7 +113,9 @@ int main(int argc, char const *argv[])
 	po::variables_map vm;
 	po::store(po::command_line_parser(argc, argv).
 		options(desc).positional(p).run(), vm);
-	po::notify(vm);    
+	po::notify(vm);
+
+
 
 	if (vm.count("help")) {
 	    std::cout << desc << "\n";
@@ -124,7 +126,7 @@ int main(int argc, char const *argv[])
 	if (vm.count("model")) {
 		model_name = vm["model"].as<std::string>();
 	} else {
-	    //BOOST_LOG_TRIVIAL(info) << "Model was not set. Defaulting to r73.c.p1.006.ont.model\n";
+	    BOOST_LOG_TRIVIAL(info) << "Model was not set. Defaulting to r73.c.p1.006.ont.model\n";
 	    model_name = "r73.c.p1.006.ont.model";
 	}
 
@@ -166,14 +168,15 @@ int main(int argc, char const *argv[])
 	}
 
 	std::vector<std::vector<char> >viterbi_results;
+	std::vector<std::vector<int>> v_paths;
 	if (vm.count("viterbi")){
 		for (int f = 0; f < input_file_data.size(); f++){
 			if (vm.count("scale")){
 				hmm.adjust_scaling(input_file_data[f]);
 			}
-			std::vector<int>v_path = hmm.compute_viterbi_path(input_file_data[f], method);
-			viterbi_results.push_back(hmm.translate_to_bases(v_path));
+			v_paths.push_back(hmm.compute_viterbi_path(input_file_data[f], method));
 		}
+		viterbi_results = hmm.decode_paths(v_paths, method);
 
 		if (vm.count("fasta")){
 			for (int i = 0; i < input_file_names.size(); i++){
@@ -193,12 +196,10 @@ int main(int argc, char const *argv[])
 			if (vm.count("scale")){
 				hmm.adjust_scaling(input_file_data[f]);
 			}
-			Matrix<int> samples = hmm.generate_samples(num_of_samples, input_file_data[f], method, version);
+			Matrix<int> samples = hmm.generate_samples(num_of_samples, input_file_data[f], "GPU", version);
+			Matrix<char>translated_samples = hmm.decode_paths(samples, method);
 
 			if (vm.count("fasta")){
-				Matrix<char>translated_samples(samples.size());
-				std::transform(samples.begin(), samples.end(), translated_samples.begin(),
-							[hmm](std::vector<int>x){return hmm.translate_to_bases(x);});
 				std::vector<std::string>seq_names;
 				for (int i = 0; i < samples.size(); i++){
 					seq_names.push_back(input_file_names[f] + "_sample_" + std::to_string(i));

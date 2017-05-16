@@ -108,7 +108,6 @@ void gpu_forward_matrix(
 		fw_matrix [i] = (init_transition_prob * states[i].get_emission_probability(event_sequence[0])).exponent;
 	}
 
-	//convert states to struct type
 	state_params *state_p = (state_params *)malloc(num_of_states * sizeof(state_params));
 	for (int i = 0; i < num_of_states; i++){
 		state_params s;
@@ -227,7 +226,6 @@ std::vector<std::vector<int> > gpu_samples(
 	int num_of_states = states.size();
 	int seq_length = event_sequence.size();
 
-	//convert transitions to struct type
 	inv_transition *inv_neighbors = (inv_transition *)malloc(num_of_states * max_in_degree *sizeof(inv_transition));
 	for (int i = 0; i < num_of_states; i++){
 		for (int j = 0; j < inverse_neighbors[i].size(); j++){
@@ -254,11 +252,6 @@ std::vector<std::vector<int> > gpu_samples(
 
 	cudaMemcpy(d_inverse_neighbors, inv_neighbors, num_of_states * max_in_degree *sizeof(inv_transition), cudaMemcpyHostToDevice);
 
-	cudaEvent_t start_fwm, stop_fwm;
-	cudaEventCreate(&start_fwm);
-	cudaEventCreate(&stop_fwm);
-	cudaEventRecord(start_fwm);
-
 	gpu_forward_matrix(
 		states,
 		event_sequence,
@@ -278,18 +271,6 @@ std::vector<std::vector<int> > gpu_samples(
 	prefix_sum<<<1,1>>>(d_last_row_weights, num_of_states, 1);
 	cudaDeviceSynchronize();
 
-	cudaEventRecord(stop_fwm);
-	cudaEventSynchronize(stop_fwm);
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start_fwm, stop_fwm);
-	printf("FW MATRIX TOTAL TOOK %d ms\n", (int)round(milliseconds));
-	cudaEventDestroy(start_fwm);
-	cudaEventDestroy(stop_fwm);
-
-	cudaEvent_t start_sampling, stop_sampling;
-	cudaEventCreate(&start_sampling);
-	cudaEventCreate(&stop_sampling);
-	cudaEventRecord(start_sampling);
 	int *d_samples;
 	cudaMalloc((void **)&d_samples, seq_length * num_of_samples * sizeof(int));
 	threads_per_block = 1024;
@@ -306,15 +287,6 @@ std::vector<std::vector<int> > gpu_samples(
 				rand()
 		);
 	cudaDeviceSynchronize();
-
-	cudaEventRecord(stop_sampling);
-	cudaEventSynchronize(stop_sampling);
-	milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
-	cudaEventDestroy(start_sampling);
-	cudaEventDestroy(stop_sampling);
-	printf("SAMPLING GPU TOOK %d ms\n",(int)round(milliseconds));
-
 	
 	int *samples = (int *)malloc(seq_length * num_of_samples * sizeof(int));
 	cudaMemcpy(samples, d_samples, seq_length * num_of_samples * sizeof(int), cudaMemcpyDeviceToHost);

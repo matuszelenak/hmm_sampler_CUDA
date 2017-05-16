@@ -28,4 +28,6 @@ std::vector<std::vector<int> > gpu_samples_v2(
 	int max_in_degree,
 	std::vector<double>&event_sequence);
 
+std::vector<std::vector<char> > gpu_decode_paths(std::vector<std::vector<int> >&samples, std::vector<std::string>&kmers);
+
 #endif
