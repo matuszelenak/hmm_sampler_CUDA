@@ -9,7 +9,7 @@ def suffix(n):
 def random_hmm(kmer_size):
 	f = open('hmm'+str(kmer_size), 'w+')
 	for kmer in suffix(kmer_size):
-		f.write(kmer + "\t" + str(uniform(45.0, 75.0)) + '\t' + str(uniform(1.0, 2.5)) + '\n')
+		f.write(kmer + "\t" + str(uniform(0, 1)) + '\t' + str(uniform(0, 1)) + '\n')
 	f.close()
 
 for k in range(1,9):

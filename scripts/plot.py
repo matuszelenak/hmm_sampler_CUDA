@@ -47,7 +47,7 @@ def plot_speedup(x_data, y_cpu, y_gpu, title, xlabel, ylabel, filename, p):
 f = open('benchmarks_v3/data_merged')
 j = json.loads("".join(f.readlines()))
 
-"""
+
 x_data = j['data_sizes']
 y_data_cpu = [sum([int(y) for y in x['fw']])/len(x['fw']) for x in j['cpu']]
 y_data_gpu = [sum([int(y) for y in x['fw']])/len(x['fw']) for x in j['gpu']]
@@ -71,11 +71,6 @@ j = json.loads("".join(f.readlines()))
 x_data = j['sample_sizes']
 y_data_cpu = [sum([int(y) for y in x['sample']])/len(x['sample']) for x in j['cpu']]
 y_data_gpu = [sum([int(y) for y in x['sample']])/len(x['sample']) for x in j['gpu']]
-
-#print(" & ".join(map(str, x_data[:len(y_data_gpu)])) + "\\\\")
-#print(" & ".join(list(map(str, y_data_cpu)) + ['N/A' for _ in range(len(y_data_gpu) - len(y_data_cpu))]) + "\\\\")
-#print(" & ".join(list(map(str, y_data_gpu))) + "\\\\")
-#print(" & ".join([str(math.floor(x/y)) for x,y in zip(y_data_cpu, y_data_gpu)] + ['N/A' for _ in range(len(y_data_gpu) - len(y_data_cpu))]) + "\\\\")
 
 make_graph(x_data, y_data_cpu, y_data_gpu, "Execution time for number of samples", "Number of samples", "Time in ms", "SampleCompare")
 
@@ -137,8 +132,6 @@ y_data_gpu = [int(x['total']) for x in j['gpu']]
 make_graph(x_data, y_data_cpu, y_data_gpu, "Comparison of raw power", "Data size", "Time in ms", "CalibrationCompare")
 
 plot_speedup(x_data, y_data_gpu, y_data_cpu, "CPU vs GPU raw performance", "Data size", "GPU/CPU ratio", "CalibrationCompareSpeedup", True)
-
-"""
 
 f = open('benchmarks_v3/decode_comparison_16_05_2017 16:52:49')
 j = json.loads("".join(f.readlines()))

@@ -59,7 +59,6 @@ def run_comparisons():
 	print("Data generation done")
 
 	#performance depending on data size. Default kmer size 6, skip size 1, sample size 100
-	"""
 	kmer = 6
 	skip = 1
 	sample = 100
@@ -150,7 +149,6 @@ def run_comparisons():
 	f.write(json.dumps(sample_size_comparison, sort_keys=True, indent=4, separators=(',', ': ')))
 	f.close()
 
-	"""
 	#performance depending on sample size
 	#default kmer size 6, data 1000, skip 1 
 	skip = 1
