@@ -106,7 +106,7 @@ int main(int argc, char const *argv[])
 		("method",po::value<std::string>(), "Method for calculation CPU|GPU")
 		("raw-input", "Treat input files as raw text files only containing the event means")
 		("maxskip", po::value<int>(), "Set maximum number of bases the HMM can skip in a transition")
-		("version", po::value<int>(), "Set sampling algorithm version. Version 1 consumes more ram, version 2 is slower for big number of samples")
+		("v1", "Set sampling algorithm to version 1. Version 1 consumes more ram, version 2 is slower for big number of samples.")
 	;
 	po::positional_options_description p;
 	p.add("input-file", -1);
@@ -184,10 +184,8 @@ int main(int argc, char const *argv[])
 		}
 	}
 
-	int version = 1;
-	if (vm.count("version")){
-		version = vm["version"].as<int>();
-	}
+	int version = 2;
+	if (vm.count("v1")) version = 1;
 
 	if (vm.count("sample")){
 		int num_of_samples = vm["sample"].as<int>();

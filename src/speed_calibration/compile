@@ -1,0 +1,6 @@
+#!/bin/bash
+clear
+clear
+nvcc -dc calibration.cu -arch sm_35
+g++ -c  main.cpp --std=c++11 
+nvcc -arch sm_35 -o  calibration calibration.o main.o

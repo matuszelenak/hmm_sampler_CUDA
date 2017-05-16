@@ -276,19 +276,29 @@ std::vector<std::vector<int> > gpu_samples_v2(
 	cudaEventSynchronize(stop_sampling);
 	milliseconds = 0;
 	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
-	cudaEventDestroy(start_sampling);
-	cudaEventDestroy(stop_sampling);
 	printf("SAMPLING GPU TOOK %d ms\n",(int)round(milliseconds));
 
 	std::vector<std::vector<int> >r;
 
+	cudaEventCreate(&start_sampling);
+	cudaEventCreate(&stop_sampling);
+	cudaEventRecord(start_sampling);
 	int *samples = (int *)malloc(seq_length * num_of_samples * sizeof(int));
 	cudaMemcpy(samples, d_samples, seq_length * num_of_samples * sizeof(int), cudaMemcpyDeviceToHost);
-
+	cudaEventRecord(stop_sampling);
+	cudaEventSynchronize(stop_sampling);
+	milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
+	printf("SAMPLE ALLOC AND COPY TOOK %d ms\n",(int)round(milliseconds));
+	/*
 	for (int i = 0; i < num_of_samples; i++){
 		std::vector<int>temp(samples + i * seq_length, samples + (i+1) * seq_length);
 		r.push_back(temp);
-	}
+	}*/
+
+	cudaEventCreate(&start_sampling);
+	cudaEventCreate(&stop_sampling);
+	cudaEventRecord(start_sampling);
 
 	cudaFree(d_fw_matrix);
 	cudaFree(d_sequence);
@@ -298,7 +308,15 @@ std::vector<std::vector<int> > gpu_samples_v2(
 	cudaFree(d_state_weights);
 	free(fw_matrix);
 	free(inv_neighbors);
-	free(samples);
+
+	cudaEventRecord(stop_sampling);
+	cudaEventSynchronize(stop_sampling);
+	milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start_sampling, stop_sampling);
+	printf("SAMPLE FREEING MEM TOOK %d ms\n",(int)round(milliseconds));
+	cudaEventDestroy(start_sampling);
+	cudaEventDestroy(stop_sampling);
+	//free(samples);
 
 	return r;
 }
